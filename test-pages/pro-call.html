@@ -670,9 +670,22 @@
         // 更新字幕
         function updateSubtitle(text, type, isFinal) {
             const subtitleId = type === 'user' ? 'userSubtitle' : 'agentSubtitle';
-            const subtitle = document.getElementById(subtitleId);
+            let subtitle = document.getElementById(subtitleId);
 
-            if (!subtitle) return;
+            if (!subtitle) {
+                // 创建字幕元素
+                subtitle = document.createElement('div');
+                subtitle.id = subtitleId;
+                subtitle.className = 'subtitle';
+                
+                const section = type === 'user' ? 
+                    document.querySelector('.user-section') : 
+                    document.querySelector('.agent-section');
+                
+                if (section) {
+                    section.appendChild(subtitle);
+                }
+            }
 
             subtitle.textContent = text;
             subtitle.classList.add('show');
@@ -681,6 +694,7 @@
                 subtitle.classList.add('final');
                 setTimeout(() => {
                     subtitle.classList.remove('show', 'final');
+                    setTimeout(() => subtitle.remove(), 500);
                 }, 3000);
             }
         }
@@ -759,7 +773,8 @@
                         updateSubtitle(text, 'agent', true);
                     },
                     onAudio: (audio) => {
-                        // SDK 自动播放
+                        // SDK 自动播放 TTS
+                        gateway.playAudio(audio);
                     },
                     onStatus: (status) => {
                         if (status === 'recognizing') {
@@ -768,6 +783,10 @@
                             updateAgentStatus('thinking', false);
                         }
                     },
+                    onError: (error) => {
+                        addLogEntry(`错误：${error.message}`, 'system');
+                        console.error('Gateway error:', error);
+                    }
                     onError: (error) => {
                         addLogEntry(`错误：${error.message}`, 'system');
                     }
