@@ -608,7 +608,7 @@
     </div>
 
     <!-- 引入 SDK -->
-    <script src="../sdk/voice-gateway.js"></script>
+    <script src="/sdk/voice-gateway.js"></script>
 
     <script>
         // 全局状态
@@ -721,13 +721,17 @@
 
         // 开始通话
         async function startCall() {
+            console.log('📞 开始通话...');
+            
             // 禁用拨号按钮
-            document.getElementById('btnCall').disabled = true;
+            const btnCall = document.getElementById('btnCall');
+            if (btnCall) btnCall.disabled = true;
             
             updateCallStatusText('正在连接...');
             updateAgentStatus('connecting');
 
             try {
+                console.log('🎤 请求麦克风权限...');
                 // 请求麦克风
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
@@ -736,6 +740,7 @@
                         sampleRate: SAMPLE_RATE
                     }
                 });
+                console.log('✅ 麦克风权限已获取');
 
                 // 初始化 AudioContext
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({
