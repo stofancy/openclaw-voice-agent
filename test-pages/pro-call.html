@@ -552,6 +552,9 @@
         <!-- 控制区域 -->
         <footer class="controls-area">
             <div class="controls-row">
+                <button class="control-btn" id="btnCall" onclick="startCall()" style="background: #48bb78; color: white;">
+                    📞
+                </button>
                 <button class="control-btn btn-hangup" id="btnHangup" onclick="endCall()" disabled>
                     📴
                 </button>
@@ -673,6 +676,9 @@
 
         // 开始通话
         async function startCall() {
+            // 禁用拨号按钮
+            document.getElementById('btnCall').disabled = true;
+            
             updateCallStatusText('正在连接...');
             updateAgentStatus('connecting');
 
@@ -768,12 +774,11 @@
 
             updateCallStatusText('点击按钮开始通话');
             updateAgentStatus('ready');
+            document.getElementById('btnCall').disabled = false;
             document.getElementById('btnHangup').disabled = true;
             document.getElementById('btnMic').disabled = true;
             document.getElementById('btnMic').classList.remove('muted');
             isMuted = false;
-
-            addLogEntry('通话结束', 'system');
         }
 
         // 切换静音
@@ -887,10 +892,10 @@
             // 检查浏览器支持
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 updateCallStatusText('浏览器不支持');
-                document.getElementById('btnHangup').disabled = true;
+                document.getElementById('btnCall').disabled = true;
             }
 
-            // 添加日志按钮点击事件 (长按)
+            // 添加日志按钮点击事件 (长按挂断按钮)
             const btnHangup = document.getElementById('btnHangup');
             let longPressTimer;
 
