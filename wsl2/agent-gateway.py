@@ -37,16 +37,32 @@ LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / f"agent_gateway_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
-def log(message):
-    """Simple log"""
-    timestamp = datetime.now().isoformat()
-    line = f"[{timestamp}] {message}"
+def log(message, level="INFO"):
+    """增强日志 - 同时输出到文件和控制台"""
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    line = f"[{timestamp}] [{level}] {message}"
     print(line, flush=True)
     try:
         with open(LOG_FILE, 'a', encoding='utf-8') as f:
             f.write(line + '\n')
     except:
         pass
+
+def log_event(event_type, details=""):
+    """记录重要事件 (高亮显示)"""
+    emoji_map = {
+        'connect': '🔗',
+        'disconnect': '🔴',
+        'speaking': '🎤',
+        'stt': '📝',
+        'agent': '🤖',
+        'tts': '🔊',
+        'error': '❌',
+        'success': '✅',
+        'volume': '📊',
+    }
+    emoji = emoji_map.get(event_type, '📋')
+    log(f"{emoji} {event_type.upper()}: {details}")
 
 # Set API Key
 dashscope.api_key = API_KEY
@@ -415,14 +431,13 @@ class AgentGateway:
                 # STT 识别结果，转发给 Agent
                 text = data.get('text', '')
                 if text:
-                    log(f"📥 STT 结果：{text}")
-                    log(f"📋 文本长度：{len(text)} 字符")
+                    log_event('stt', text)
                     await self.process_stt_result(text)
                 else:
-                    log(f"⚠️  STT 结果为空")
+                    log("⚠️  STT 结果为空", "WARNING")
             
             elif msg_type == 'connect':
-                log("🔗 收到连接测试请求")
+                log_event('connect', '客户端连接测试')
                 await self.send_to_clients_async({
                     "type": "connected",
                     "timestamp": datetime.now().isoformat(),
@@ -448,14 +463,15 @@ class AgentGateway:
     
     async def process_stt_result(self, text: str) -> None:
         """处理 STT 识别结果"""
-        log(f"🗣️  处理 STT 结果：{text}")
+        log_event('speaking', f'用户说：{text}')
         
         # 发送状态
         await self.send_to_clients_async({"type": "status", "status": "processing"})
         
         # 调用 Agent (同步)
+        log("⏳ 调用 Agent...", "INFO")
         reply = self.send_to_agent(text)
-        log(f"🤖 Agent 回复：{reply[:100]}...")
+        log_event('agent', reply[:50] + '...' if len(reply) > 50 else reply)
         
         # 发送文本回复
         await self.send_to_clients_async({
@@ -465,6 +481,7 @@ class AgentGateway:
         
         # 调用 TTS (同步)
         if reply:
+            log_event('tts', '开始合成语音')
             self.call_tts(reply)
     
     async def send_to_clients_async(self, data: dict) -> None:
