@@ -583,13 +583,13 @@
         <!-- 控制区域 -->
         <footer class="controls-area">
             <div class="controls-row">
-                <button class="control-btn" id="btnCall" onclick="startCall()" style="background: #48bb78; color: white;">
+                <button class="control-btn" id="btnCall" style="background: #48bb78; color: white;">
                     📞
                 </button>
-                <button class="control-btn btn-hangup" id="btnHangup" onclick="endCall()" disabled>
+                <button class="control-btn btn-hangup" id="btnHangup" disabled>
                     📴
                 </button>
-                <button class="control-btn btn-mic" id="btnMic" onclick="toggleMic()" disabled>
+                <button class="control-btn btn-mic" id="btnMic" disabled>
                     🎤
                 </button>
             </div>
@@ -941,28 +941,49 @@
 
         // 页面加载
         window.addEventListener('DOMContentLoaded', () => {
+            console.log('📱 页面已加载');
+            
             updateCallStatusText('准备就绪');
             updateAgentStatus('ready');
+
+            // 绑定按钮事件
+            const btnCall = document.getElementById('btnCall');
+            const btnHangup = document.getElementById('btnHangup');
+            const btnMic = document.getElementById('btnMic');
+            
+            if (btnCall) {
+                btnCall.addEventListener('click', startCall);
+                console.log('✅ 拨号按钮事件已绑定');
+            }
+            
+            if (btnHangup) {
+                btnHangup.addEventListener('click', endCall);
+            }
+            
+            if (btnMic) {
+                btnMic.addEventListener('click', toggleMic);
+            }
 
             // 检查浏览器支持
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 updateCallStatusText('浏览器不支持');
-                document.getElementById('btnCall').disabled = true;
+                if (btnCall) btnCall.disabled = true;
             }
 
             // 添加日志按钮点击事件 (长按挂断按钮)
-            const btnHangup = document.getElementById('btnHangup');
             let longPressTimer;
 
-            btnHangup.addEventListener('touchstart', () => {
-                longPressTimer = setTimeout(() => {
-                    showLog();
-                }, 1000);
-            });
+            if (btnHangup) {
+                btnHangup.addEventListener('touchstart', () => {
+                    longPressTimer = setTimeout(() => {
+                        showLog();
+                    }, 1000);
+                });
 
-            btnHangup.addEventListener('touchend', () => {
-                clearTimeout(longPressTimer);
-            });
+                btnHangup.addEventListener('touchend', () => {
+                    clearTimeout(longPressTimer);
+                });
+            }
         });
 
         // 页面卸载
