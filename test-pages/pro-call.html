@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>AI Travel Agent - 智能旅行助手</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
+    <style>
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5a67d8;
+            --secondary: #764ba2;
+            --success: #48bb78;
+            --warning: #ed8936;
+            --danger: #f56565;
+            --info: #4299e1;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-primary: #2d3748;
+            --text-secondary: #718096;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+        /* 主容器 */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* 头部 */
+        .app-header {
+            padding: 20px;
+            text-align: center;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .brand-logo {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .brand-name {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .brand-slogan {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+
+        /* 通话区域 */
+        .call-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        /* Agent 区域 */
+        .agent-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+        }
+
+        .avatar-container {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .avatar-container.speaking {
+            animation: agent-speak 1s ease-in-out infinite;
+        }
+
+        @keyframes agent-speak {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 10px 40px rgba(66, 153, 225, 0.4);
+            }
+            50% {
+                transform: scale(1.1);
+                box-shadow: 0 15px 60px rgba(66, 153, 225, 0.6);
+            }
+        }
+
+        .avatar-container.listening {
+            animation: agent-listen 2s ease-in-out infinite;
+        }
+
+        @keyframes agent-listen {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .agent-name {
+            margin-top: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .agent-status {
+            margin-top: 4px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        /* 字幕 */
+        .subtitle {
+            background: var(--card-bg);
+            padding: 12px 20px;
+            border-radius: 16px;
+            margin-top: 16px;
+            max-width: 80%;
+            text-align: center;
+            font-size: 15px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        .subtitle.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .subtitle.final {
+            animation: subtitle-fade 0.5s ease-in 2.5s forwards;
+        }
+
+        @keyframes subtitle-fade {
+            to {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+        }
+
+        /* 中间状态区域 */
+        .status-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 0;
+        }
+
+        .wave-animation {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            height: 40px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .wave-animation.show {
+            opacity: 1;
+        }
+
+        .wave-bar {
+            width: 4px;
+            background: white;
+            border-radius: 2px;
+            animation: wave 1s ease-in-out infinite;
+        }
+
+        .wave-bar:nth-child(1) { height: 20px; animation-delay: 0s; }
+        .wave-bar:nth-child(2) { height: 30px; animation-delay: 0.1s; }
+        .wave-bar:nth-child(3) { height: 40px; animation-delay: 0.2s; }
+        .wave-bar:nth-child(4) { height: 30px; animation-delay: 0.3s; }
+        .wave-bar:nth-child(5) { height: 20px; animation-delay: 0.4s; }
+
+        @keyframes wave {
+            0%, 100% { transform: scaleY(0.5); }
+            50% { transform: scaleY(1); }
+        }
+
+        .volume-meter {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .volume-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #48bb78, #f56565);
+            width: 0%;
+            transition: width 0.1s ease-out;
+            border-radius: 3px;
+        }
+
+        .call-status-text {
+            margin-top: 16px;
+            font-size: 14px;
+            color: rgba(255,255,255,0.9);
+            font-weight: 500;
+        }
+
+        /* 用户区域 */
+        .user-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+        }
+
+        .user-avatar-container {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+
+        .user-avatar-container.speaking {
+            animation: user-speak 0.5s ease-in-out infinite;
+            background: rgba(255,255,255,0.3);
+        }
+
+        @keyframes user-speak {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .user-name {
+            margin-top: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.9);
+        }
+
+        /* 控制区域 */
+        .controls-area {
+            padding: 20px;
+            flex-shrink: 0;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .control-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-hangup {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-hangup:hover:not(:disabled) {
+            background: #e53e3e;
+        }
+
+        .btn-mic {
+            background: white;
+            color: var(--text-primary);
+        }
+
+        .btn-mic:hover:not(:disabled) {
+            background: #f7fafc;
+        }
+
+        .btn-mic.muted {
+            background: var(--text-secondary);
+            color: white;
+        }
+
+        /* 权限提示 */
+        .permission-notice {
+            background: rgba(254, 243, 199, 0.95);
+            border-left: 4px solid var(--warning);
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .permission-notice.show {
+            display: block;
+            animation: slide-down 0.3s ease-out;
+        }
+
+        @keyframes slide-down {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 对话记录 */
+        .conversation-log {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            display: none;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .conversation-log.show {
+            display: block;
+        }
+
+        .log-modal {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .log-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .log-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .log-entry {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .log-entry.user {
+            background: #bee3f8;
+            margin-left: 20%;
+        }
+
+        .log-entry.agent {
+            background: #c6f6d5;
+            margin-right: 20%;
+        }
+
+        .log-entry.system {
+            background: #edf2f7;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* 桌面端适配 */
+        @media (min-width: 768px) {
+            .app-container {
+                padding: 40px;
+            }
+
+            .avatar-container {
+                width: 120px;
+                height: 120px;
+                font-size: 56px;
+            }
+
+            .control-btn {
+                width: 80px;
+                height: 80px;
+                font-size: 32px;
+            }
+
+            .controls-row {
+                gap: 20px;
+            }
+        }
+
+        /* 横屏适配 */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .app-header {
+                padding: 10px;
+            }
+
+            .brand-logo {
+                font-size: 24px;
+            }
+
+            .call-area {
+                flex-direction: row;
+                padding: 10px;
+            }
+
+            .agent-section, .user-section {
+                padding: 10px;
+            }
+
+            .avatar-container {
+                width: 60px;
+                height: 60px;
+                font-size: 32px;
+            }
+
+            .controls-area {
+                padding: 10px;
+            }
+
+            .control-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 头部 -->
+        <header class="app-header">
+            <div class="brand-logo">✈️</div>
+            <div class="brand-name">AI Travel Agent</div>
+            <div class="brand-slogan">您的智能旅行助手</div>
+        </header>
+
+        <!-- 权限提示 -->
+        <div class="permission-notice" id="permissionNotice">
+            🔒 需要麦克风权限才能进行语音通话
+        </div>
+
+        <!-- 通话区域 -->
+        <main class="call-area">
+            <!-- Agent 区域 -->
+            <section class="agent-section">
+                <div class="avatar-container" id="agentAvatar">
+                    🤖
+                </div>
+                <div class="agent-name">AI 旅行助手</div>
+                <div class="agent-status" id="agentStatus">准备就绪</div>
+                <div class="subtitle" id="agentSubtitle"></div>
+            </section>
+
+            <!-- 状态区域 -->
+            <section class="status-section">
+                <div class="wave-animation" id="waveAnimation">
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                </div>
+                <div class="volume-meter">
+                    <div class="volume-bar" id="volumeBar"></div>
+                </div>
+                <div class="call-status-text" id="callStatusText">点击按钮开始通话</div>
+            </section>
+
+            <!-- 用户区域 -->
+            <section class="user-section">
+                <div class="user-avatar-container" id="userAvatar">
+                    👤
+                </div>
+                <div class="user-name">我</div>
+                <div class="subtitle" id="userSubtitle"></div>
+            </section>
+        </main>
+
+        <!-- 控制区域 -->
+        <footer class="controls-area">
+            <div class="controls-row">
+                <button class="control-btn btn-hangup" id="btnHangup" onclick="endCall()" disabled>
+                    📴
+                </button>
+                <button class="control-btn btn-mic" id="btnMic" onclick="toggleMic()" disabled>
+                    🎤
+                </button>
+            </div>
+        </footer>
+
+        <!-- 对话记录模态框 -->
+        <div class="conversation-log" id="conversationLog" onclick="closeLog()">
+            <div class="log-modal" onclick="event.stopPropagation()">
+                <div class="log-header">
+                    <div class="log-title">💬 对话记录</div>
+                    <button class="log-close" onclick="closeLog()">×</button>
+                </div>
+                <div id="logContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入 SDK -->
+    <script src="../sdk/voice-gateway.js"></script>
+
+    <script>
+        // 全局状态
+        let gateway = null;
+        let audioContext = null;
+        let mediaStream = null;
+        let analyser = null;
+        let isMuted = false;
+        let isSpeaking = false;
+        let callStartTime = null;
+
+        const WS_URL = "ws://localhost:8765";
+        const SAMPLE_RATE = 16000;
+        const CHUNK_SIZE = 1024;
+
+        // 更新 Agent 状态
+        function updateAgentStatus(status, isSpeaking = false) {
+            const avatar = document.getElementById('agentAvatar');
+            const statusText = document.getElementById('agentStatus');
+            const wave = document.getElementById('waveAnimation');
+
+            avatar.classList.remove('speaking', 'listening');
+
+            if (isSpeaking) {
+                avatar.classList.add('speaking');
+                statusText.textContent = '正在说话...';
+                wave.classList.remove('show');
+            } else if (status === 'listening') {
+                avatar.classList.add('listening');
+                statusText.textContent = '正在收听...';
+                wave.classList.add('show');
+            } else {
+                statusText.textContent = status;
+                wave.classList.remove('show');
+            }
+        }
+
+        // 更新用户状态
+        function updateUserStatus(isSpeaking) {
+            const avatar = document.getElementById('userAvatar');
+            if (isSpeaking) {
+                avatar.classList.add('speaking');
+            } else {
+                avatar.classList.remove('speaking');
+            }
+        }
+
+        // 更新通话状态文本
+        function updateCallStatusText(text) {
+            document.getElementById('callStatusText').textContent = text;
+        }
+
+        // 更新音量
+        function updateVolume(volume) {
+            const bar = document.getElementById('volumeBar');
+            bar.style.width = `${Math.min(100, volume * 2)}%`;
+        }
+
+        // 更新字幕
+        function updateSubtitle(text, type, isFinal) {
+            const subtitleId = type === 'user' ? 'userSubtitle' : 'agentSubtitle';
+            const subtitle = document.getElementById(subtitleId);
+
+            if (!subtitle) return;
+
+            subtitle.textContent = text;
+            subtitle.classList.add('show');
+
+            if (isFinal) {
+                subtitle.classList.add('final');
+                setTimeout(() => {
+                    subtitle.classList.remove('show', 'final');
+                }, 3000);
+            }
+        }
+
+        // 添加对话记录
+        function addLogEntry(text, type) {
+            const logContent = document.getElementById('logContent');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+
+            const speaker = type === 'user' ? '👤 我' : (type === 'agent' ? '🤖 AI 助手' : '💬');
+            const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+            entry.innerHTML = `
+                <div style="font-size: 12px; color: #718096; margin-bottom: 4px;">
+                    ${speaker} · ${time}
+                </div>
+                <div>${text}</div>
+            `;
+
+            logContent.appendChild(entry);
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        // 开始通话
+        async function startCall() {
+            updateCallStatusText('正在连接...');
+            updateAgentStatus('connecting');
+
+            try {
+                // 请求麦克风
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: SAMPLE_RATE
+                    }
+                });
+
+                // 初始化 AudioContext
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: SAMPLE_RATE
+                });
+
+                // 分析器
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+
+                // 音量监测
+                startVolumeMonitor();
+
+                // 连接网关
+                gateway = new VoiceGateway({
+                    url: WS_URL,
+                    autoPlayAudio: true,
+                    onConnected: () => {
+                        updateCallStatusText('通话中');
+                        updateAgentStatus('ready');
+                        document.getElementById('btnHangup').disabled = false;
+                        document.getElementById('btnMic').disabled = false;
+                        addLogEntry('通话开始', 'system');
+                        startAudioCapture();
+                    },
+                    onDisconnected: () => {
+                        updateCallStatusText('已断开');
+                        updateAgentStatus('disconnected');
+                        endCall();
+                    },
+                    onReply: (text) => {
+                        addLogEntry(text, 'agent');
+                        updateSubtitle(text, 'agent', true);
+                    },
+                    onAudio: (audio) => {
+                        // SDK 自动播放
+                    },
+                    onStatus: (status) => {
+                        if (status === 'recognizing') {
+                            updateAgentStatus('listening', false);
+                        } else if (status === 'processing') {
+                            updateAgentStatus('thinking', false);
+                        }
+                    },
+                    onError: (error) => {
+                        addLogEntry(`错误：${error.message}`, 'system');
+                    }
+                });
+
+                await gateway.connect();
+
+            } catch (error) {
+                updateCallStatusText('连接失败');
+                if (error.name === 'NotAllowedError') {
+                    document.getElementById('permissionNotice').classList.add('show');
+                }
+                console.error('通话失败:', error);
+            }
+        }
+
+        // 结束通话
+        function endCall() {
+            stopAudioCapture();
+
+            if (gateway) {
+                gateway.disconnect();
+                gateway = null;
+            }
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+
+            updateCallStatusText('点击按钮开始通话');
+            updateAgentStatus('ready');
+            document.getElementById('btnHangup').disabled = true;
+            document.getElementById('btnMic').disabled = true;
+            document.getElementById('btnMic').classList.remove('muted');
+            isMuted = false;
+
+            addLogEntry('通话结束', 'system');
+        }
+
+        // 切换静音
+        function toggleMic() {
+            isMuted = !isMuted;
+            const btn = document.getElementById('btnMic');
+
+            if (isMuted) {
+                btn.classList.add('muted');
+                btn.textContent = '🔇';
+                updateCallStatusText('已静音');
+            } else {
+                btn.classList.remove('muted');
+                btn.textContent = '🎤';
+                updateCallStatusText('通话中');
+            }
+        }
+
+        // 音量监测
+        function startVolumeMonitor() {
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            function update() {
+                if (!analyser) return;
+
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                updateVolume(average);
+
+                // 检测说话状态
+                if (average > 30 && !isMuted) {
+                    if (!isSpeaking) {
+                        isSpeaking = true;
+                        updateUserStatus(true);
+                        updateCallStatusText('正在说话...');
+                    }
+                } else {
+                    if (isSpeaking) {
+                        isSpeaking = false;
+                        updateUserStatus(false);
+                        updateCallStatusText('通话中');
+                    }
+                }
+
+                requestAnimationFrame(update);
+            }
+
+            update();
+        }
+
+        // 音频采集
+        let audioProcessor = null;
+        let isStreaming = false;
+
+        function startAudioCapture() {
+            const scriptProcessor = audioContext.createScriptProcessor(CHUNK_SIZE, 1, 1);
+
+            scriptProcessor.onaudioprocess = (e) => {
+                if (isMuted || !gateway || !gateway.isConnected() || !isStreaming) return;
+
+                const inputData = e.inputBuffer.getChannelData(0);
+
+                // Float32 → Int16
+                const int16Data = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                    const s = Math.max(-1, Math.min(1, inputData[i]));
+                    int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+
+                // 发送 PCM 数据
+                gateway.ws.send(int16Data.buffer);
+            };
+
+            audioProcessor = scriptProcessor;
+            const source = audioContext.createMediaStreamSource(mediaStream);
+            source.connect(audioProcessor);
+            audioProcessor.connect(audioContext.destination);
+
+            isStreaming = true;
+            if (gateway && gateway.isConnected()) {
+                gateway.send({ type: 'audio_stream_start' });
+            }
+        }
+
+        function stopAudioCapture() {
+            if (audioProcessor) {
+                if (gateway && gateway.isConnected() && isStreaming) {
+                    gateway.send({ type: 'audio_stream_stop' });
+                    isStreaming = false;
+                }
+
+                audioProcessor.disconnect();
+                audioProcessor = null;
+            }
+        }
+
+        // 显示对话记录
+        function showLog() {
+            document.getElementById('conversationLog').classList.add('show');
+        }
+
+        function closeLog() {
+            document.getElementById('conversationLog').classList.remove('show');
+        }
+
+        // 页面加载
+        window.addEventListener('DOMContentLoaded', () => {
+            updateCallStatusText('准备就绪');
+            updateAgentStatus('ready');
+
+            // 检查浏览器支持
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                updateCallStatusText('浏览器不支持');
+                document.getElementById('btnHangup').disabled = true;
+            }
+
+            // 添加日志按钮点击事件 (长按)
+            const btnHangup = document.getElementById('btnHangup');
+            let longPressTimer;
+
+            btnHangup.addEventListener('touchstart', () => {
+                longPressTimer = setTimeout(() => {
+                    showLog();
+                }, 1000);
+            });
+
+            btnHangup.addEventListener('touchend', () => {
+                clearTimeout(longPressTimer);
+            });
+        });
+
+        // 页面卸载
+        window.addEventListener('beforeunload', () => {
+            endCall();
+        });
+    </script>
+</body>
+</html>
