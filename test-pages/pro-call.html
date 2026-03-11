@@ -792,9 +792,6 @@
                         addLogEntry(`错误：${error.message}`, 'system');
                         console.error('Gateway error:', error);
                     }
-                    onError: (error) => {
-                        addLogEntry(`错误：${error.message}`, 'system');
-                    }
                 });
 
                 await gateway.connect();
