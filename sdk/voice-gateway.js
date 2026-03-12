@@ -279,7 +279,8 @@ class VoiceGateway {
         
         // 播放完成后播放下一个
         source.onended = () => {
-            setTimeout(() => this._playNextInQueue(), 50);
+            // 等待一小段时间确保播放完全结束
+            setTimeout(() => this._playNextInQueue(), 100);
         };
         
         source.start(0);
