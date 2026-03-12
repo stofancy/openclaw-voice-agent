@@ -301,14 +301,19 @@ class VoiceGateway {
         console.log(`[播放] ▶️ 开始播放...`);
         console.log(`[播放] AudioContext 状态:`, this.audioContext.state);
         
+        // 保持 source 引用，防止被垃圾回收
+        this.currentSource = source;
+        
         // 播放状态监听
         source.onended = () => {
             console.log(`[播放] ✅ 播放完成`);
+            this.currentSource = null;
             this._playNextInQueue();
         };
         
         source.onerror = (error) => {
             console.error(`[播放] ❌ 播放错误:`, error);
+            this.currentSource = null;
             this._playNextInQueue();
         };
         
