@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # 网关看门狗脚本 - 自动监控并重启网关
+# 只通过看门狗启动网关，避免冲突
 #
 
 LOG_DIR="$HOME/workspaces/audio-proxy/logs"
@@ -14,10 +15,27 @@ log() {
 
 start_gateway() {
     log "🚀 启动网关..."
+    
+    # 先清理旧进程（如果有）
+    if [ -f "$PID_FILE" ]; then
+        OLD_PID=$(cat "$PID_FILE")
+        if ps -p $OLD_PID > /dev/null 2>&1; then
+            log "⚠️  发现旧进程 (PID: $OLD_PID)，停止中..."
+            kill $OLD_PID 2>/dev/null
+            sleep 2
+        fi
+        rm -f "$PID_FILE"
+    fi
+    
+    # 确保端口空闲
+    fuser -k 8765/tcp 2>/dev/null
+    sleep 1
+    
     cd "$HOME/workspaces/audio-proxy"
     source venv/bin/activate
     cd wsl2
     
+    # 启动网关
     nohup python3 agent-gateway.py > "../logs/agent-gateway-$(date +%Y%m%d_%H%M%S).log" 2>&1 &
     GATEWAY_PID=$!
     
@@ -53,7 +71,7 @@ check_gateway() {
     # 检查是否有进程在运行
     if pgrep -f "agent-gateway.py" > /dev/null 2>&1; then
         RUNNING_PID=$(pgrep -f "agent-gateway.py" | head -1)
-        log "✅ 网关已在运行 (PID: $RUNNING_PID)"
+        log "⚠️  发现未管理的网关进程 (PID: $RUNNING_PID)，接管中..."
         echo $RUNNING_PID > "$PID_FILE"
         return 0
     fi
