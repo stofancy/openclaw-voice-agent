@@ -213,8 +213,13 @@ class VoiceGateway {
      * @param {string} base64Audio - Base64 编码的 PCM 音频
      */
     _playAudioBase64(base64Audio) {
-        const logPrefix = `[TTS #${this.audioQueue.length + 1}]`;
-        console.log(`${logPrefix} 🎵 _playAudioBase64 调用，base64 长度:`, base64Audio ? base64Audio.length : 0);
+        const blockNum = this.audioQueue.length + 1;
+        const logPrefix = `[TTS #${blockNum}]`;
+        const timestamp = Date.now();
+        
+        console.log(`${logPrefix} 🎵 _playAudioBase64 调用 @${timestamp}, base64 长度:`, base64Audio ? base64Audio.length : 0);
+        console.log(`${logPrefix}    isPlaying:`, this.isPlaying);
+        console.log(`${logPrefix}    queue 长度：`, this.audioQueue.length);
         
         try {
             // 解码 Base64
@@ -223,7 +228,6 @@ class VoiceGateway {
             for (let i = 0; i < binaryString.length; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
-            console.log(`${logPrefix}    Base64 解码后 bytes:`, bytes.length);
             
             // PCM 16bit 转 Float32
             const samples = new Float32Array(bytes.length / 2);
@@ -232,11 +236,10 @@ class VoiceGateway {
                 const int16 = dataView.getInt16(i * 2, true); // little-endian
                 samples[i] = int16 / 32768.0;
             }
-            console.log(`${logPrefix}    PCM 转 Float32 samples:`, samples.length);
             
             // 加入播放队列
             this.audioQueue.push(samples);
-            console.log(`${logPrefix}    audioQueue 长度:`, this.audioQueue.length);
+            console.log(`${logPrefix}    ✅ 加入队列，新长度：`, this.audioQueue.length);
             
             // 如果当前没有在播放，开始播放
             if (!this.isPlaying) {
@@ -257,22 +260,26 @@ class VoiceGateway {
      * @private
      */
     _playNextInQueue() {
-        console.log(`[播放] _playNextInQueue 调用，queue 长度:`, this.audioQueue.length);
+        const timestamp = Date.now();
+        console.log(`[播放 ${timestamp}] _playNextInQueue 调用，queue 长度:`, this.audioQueue.length);
+        console.log(`[播放 ${timestamp}] isPlaying 之前:`, this.isPlaying);
         
         if (this.audioQueue.length === 0) {
-            console.log(`[播放] 队列为空，停止播放`);
+            console.log(`[播放 ${timestamp}] 队列为空，停止播放`);
             this.isPlaying = false;
             return;
         }
         
         this.isPlaying = true;
+        console.log(`[播放 ${timestamp}] isPlaying 之后:`, this.isPlaying);
+        
         const samples = this.audioQueue.shift();
-        console.log(`[播放] 取出 samples 长度:`, samples.length);
-        console.log(`[播放] 预计播放时长:`, (samples.length / 24000).toFixed(3), '秒');
+        console.log(`[播放 ${timestamp}] 取出 samples 长度:`, samples.length);
+        console.log(`[播放 ${timestamp}] 预计播放时长:`, (samples.length / 24000).toFixed(3), '秒');
         
         // 创建 AudioContext (首次调用时)
         if (!this.audioContext) {
-            console.log(`[播放] 创建 AudioContext (24kHz)`);
+            console.log(`[播放 ${timestamp}] 创建 AudioContext (24kHz)`);
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 24000 // 匹配 TTS 输出采样率
             });
@@ -280,39 +287,39 @@ class VoiceGateway {
         
         // 恢复 AudioContext（如果被挂起）
         if (this.audioContext.state === 'suspended') {
-            console.log(`[播放] AudioContext 被挂起，恢复中...`);
+            console.log(`[播放 ${timestamp}] AudioContext 被挂起，恢复中...`);
             this.audioContext.resume().then(() => {
-                console.log(`[播放] AudioContext 已恢复`);
+                console.log(`[播放 ${timestamp}] AudioContext 已恢复`);
             });
         }
         
         // 创建 AudioBuffer
         const audioBuffer = this.audioContext.createBuffer(1, samples.length, 24000);
-        
-        // 使用 copyToChannel 填充数据（MDN 推荐方式）
         audioBuffer.copyToChannel(samples, 0);
-        console.log(`[播放] 创建 AudioBuffer:`, audioBuffer.length, 'samples');
+        console.log(`[播放 ${timestamp}] 创建 AudioBuffer:`, audioBuffer.length, 'samples');
         
         // 创建音源并播放
         const source = this.audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(this.audioContext.destination);
         
-        console.log(`[播放] ▶️ 开始播放...`);
-        console.log(`[播放] AudioContext 状态:`, this.audioContext.state);
+        console.log(`[播放 ${timestamp}] ▶️ 开始播放...`);
+        console.log(`[播放 ${timestamp}] AudioContext 状态:`, this.audioContext.state);
         
         // 保持 source 引用，防止被垃圾回收
         this.currentSource = source;
         
         // 播放状态监听
         source.onended = () => {
-            console.log(`[播放] ✅ 播放完成`);
+            const endTimestamp = Date.now();
+            console.log(`[播放 ${endTimestamp}] ✅ 播放完成`);
             this.currentSource = null;
             this._playNextInQueue();
         };
         
         source.onerror = (error) => {
-            console.error(`[播放] ❌ 播放错误:`, error);
+            const errTimestamp = Date.now();
+            console.error(`[播放 ${errTimestamp}] ❌ 播放错误:`, error);
             this.currentSource = null;
             this._playNextInQueue();
         };
