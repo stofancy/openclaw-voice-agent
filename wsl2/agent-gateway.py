@@ -265,23 +265,24 @@ class AgentGateway:
             "type": "audio",
             "data": audio_b64,
         }
-        self.send_to_clients_sync(response_data)
+        try:
+            # 创建新事件循环用于同步调用
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self.send_to_clients_async(response_data))
+            loop.close()
+        except Exception as e:
+            log(f"❌ 发送音频失败：{e}")
     
     def send_to_clients_sync(self, data: dict) -> None:
         """发送数据到客户端（同步版本，用于回调）"""
-        if not self.clients:
-            return
-        
-        response_json = json.dumps(data)
-        
-        for client in list(self.clients):
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(client.send(response_json))
-                loop.close()
-            except Exception as e:
-                log(f"发送失败：{e}")
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self.send_to_clients_async(data))
+            loop.close()
+        except Exception as e:
+            log(f"发送失败：{e}")
     
     async def handle_client(self, websocket):
         """Handle browser WebSocket client"""
@@ -485,24 +486,30 @@ class AgentGateway:
         """处理 STT 识别结果"""
         log_event('speaking', f'用户说：{text}')
         
-        # 发送状态
-        await self.send_to_clients_async({"type": "status", "status": "processing"})
-        
-        # 调用 Agent (同步)
-        log("⏳ 调用 Agent...", "INFO")
-        reply = self.send_to_agent(text)
-        log_event('agent', reply[:50] + '...' if len(reply) > 50 else reply)
-        
-        # 发送文本回复
-        await self.send_to_clients_async({
-            "type": "reply",
-            "text": reply
-        })
-        
-        # 调用 TTS (同步)
-        if reply:
-            log_event('tts', '开始合成语音')
-            self.call_tts(reply)
+        try:
+            # 发送状态
+            await self.send_to_clients_async({"type": "status", "status": "recognizing"})
+            log("📤 发送 status=recognizing", "DEBUG")
+            
+            # 调用 Agent (同步)
+            log("⏳ 调用 Agent...", "INFO")
+            reply = self.send_to_agent(text)
+            log_event('agent', reply[:50] + '...' if len(reply) > 50 else reply)
+            
+            # 发送文本回复
+            await self.send_to_clients_async({
+                "type": "reply",
+                "text": reply
+            })
+            log(f"📤 发送 reply: {reply[:50]}...", "DEBUG")
+            
+            # 调用 TTS (同步)
+            if reply:
+                log_event('tts', '开始合成语音')
+                self.call_tts(reply)
+                log("✅ TTS 调用完成", "DEBUG")
+        except Exception as e:
+            log(f"❌ process_stt_result 错误：{e}", "ERROR")
     
     async def send_to_clients_async(self, data: dict) -> None:
         """发送数据到客户端（异步版本）"""
