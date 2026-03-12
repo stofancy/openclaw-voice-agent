@@ -1,6 +1,6 @@
 """Agent 调用业务逻辑处理"""
 
-from typing import Generator, Optional
+from typing import Generator, Optional, AsyncGenerator
 
 
 class AgentHandler:
@@ -9,6 +9,7 @@ class AgentHandler:
     职责：
     - 消息预处理
     - 响应后处理
+    - 流式响应处理
     - 不包含任何 API 调用逻辑
     """
     
@@ -19,6 +20,7 @@ class AgentHandler:
             agent_client: Agent 客户端（可选，由容器注入）
         """
         self.agent_client = agent_client
+        self.streaming_buffer = ""
     
     def preprocess_message(self, message: str) -> Optional[str]:
         """预处理用户消息
@@ -69,6 +71,24 @@ class AgentHandler:
         cleaned = chunk.strip()
         return cleaned if cleaned else None
     
+    def process_llm_token(self, token: str) -> Optional[str]:
+        """处理 LLM 流式 token
+        
+        Args:
+            token: 单个 token（字符或词）
+            
+        Returns:
+            处理后的 token，如果无效则返回 None
+        """
+        if not token:
+            return None
+        
+        # 过滤空白 token
+        if token.strip() == "" and len(token) > 0:
+            return token  # 保留空白字符用于格式
+        
+        return token
+    
     def validate_message(self, message: str) -> bool:
         """验证消息是否有效
         
@@ -83,3 +103,28 @@ class AgentHandler:
         
         cleaned = message.strip()
         return len(cleaned) >= 1
+    
+    def reset_streaming_buffer(self) -> None:
+        """重置流式缓冲区"""
+        self.streaming_buffer = ""
+    
+    def append_to_streaming_buffer(self, token: str) -> str:
+        """追加 token 到流式缓冲区
+        
+        Args:
+            token: token 文本
+            
+        Returns:
+            当前缓冲区内容
+        """
+        if token:
+            self.streaming_buffer += token
+        return self.streaming_buffer
+    
+    def get_streaming_buffer(self) -> str:
+        """获取当前流式缓冲区内容
+        
+        Returns:
+            缓冲区内容
+        """
+        return self.streaming_buffer

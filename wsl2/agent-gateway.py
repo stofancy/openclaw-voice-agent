@@ -647,8 +647,14 @@ class AgentGateway:
             
             # TTS 合成（使用 handler 处理，TTS 已预初始化，降低延迟）
             if reply:
+                # 发送 TTS 开始通知
+                await self.send_tts_start_to_clients()
+                
                 log_event('tts', '开始合成语音')
                 self.call_tts(reply)
+                
+                # 发送 TTS 结束通知
+                await self.send_tts_end_to_clients()
                 log("✅ TTS 调用完成", "DEBUG")
             
             # 重置 STT 状态
@@ -798,8 +804,14 @@ class AgentGateway:
             
             # 调用 TTS (使用 handler 处理)
             if reply:
+                # 发送 TTS 开始通知
+                await self.send_tts_start_to_clients()
+                
                 log_event('tts', '开始合成语音')
                 self.call_tts(reply)
+                
+                # 发送 TTS 结束通知
+                await self.send_tts_end_to_clients()
                 log("✅ TTS 调用完成", "DEBUG")
         except Exception as e:
             log(f"❌ process_stt_result 错误：{e}", "ERROR")
@@ -845,18 +857,18 @@ class AgentGateway:
         })
         log(f"📤 发送 stt_final: {text[:50]}...", "DEBUG")
     
-    async def send_llm_token_to_clients(self, text: str) -> None:
+    async def send_llm_token_to_clients(self, token: str) -> None:
         """发送 LLM 流式 token 到客户端（llm_token）
         
         Args:
-            text: token 文本
+            token: token 文本（单个字符或词）
         """
         await self.send_to_clients_async({
             "type": "llm_token",
-            "text": text,
+            "token": token,
             "timestamp": datetime.now().isoformat()
         })
-        log(f"📤 发送 llm_token: {text[:50]}...", "DEBUG")
+        log(f"📤 发送 llm_token: {token}", "DEBUG")
     
     async def send_llm_complete_to_clients(self, text: str) -> None:
         """发送 LLM 完整回复到客户端（llm_complete）
@@ -870,6 +882,22 @@ class AgentGateway:
             "timestamp": datetime.now().isoformat()
         })
         log(f"📤 发送 llm_complete: {text[:50]}...", "DEBUG")
+    
+    async def send_tts_start_to_clients(self) -> None:
+        """发送 TTS 开始播放通知到客户端（tts_start）"""
+        await self.send_to_clients_async({
+            "type": "tts_start",
+            "timestamp": datetime.now().isoformat()
+        })
+        log("📤 发送 tts_start", "DEBUG")
+    
+    async def send_tts_end_to_clients(self) -> None:
+        """发送 TTS 播放结束通知到客户端（tts_end）"""
+        await self.send_to_clients_async({
+            "type": "tts_end",
+            "timestamp": datetime.now().isoformat()
+        })
+        log("📤 发送 tts_end", "DEBUG")
     
     # ========== 兼容旧版本（保留）==========
     

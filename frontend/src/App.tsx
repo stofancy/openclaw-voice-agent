@@ -161,6 +161,25 @@ function App() {
             })
           }
           
+          // TTS 开始播放（字幕高亮）
+          if (data.type === 'tts_start') {
+            setSubtitles(prev => {
+              const lastIndex = prev.findIndex(s => s.role === 'ai' && !s.isFinal)
+              if (lastIndex !== -1) {
+                const updated = [...prev]
+                updated[lastIndex] = { ...updated[lastIndex], isFinal: true }
+                return updated
+              }
+              return prev
+            })
+            addLog('info', '🔊 TTS 开始播放')
+          }
+          
+          // TTS 播放结束（取消高亮）
+          if (data.type === 'tts_end') {
+            addLog('info', '✅ TTS 播放结束')
+          }
+          
           // ========== 兼容旧格式 ==========
           
           // 处理回复事件（兼容旧格式）
