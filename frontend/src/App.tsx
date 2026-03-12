@@ -56,7 +56,7 @@ function App() {
           if (data.type === 'reply' && data.text) {
             setStatus(`🤖 Agent: ${data.text}`)
           }
-        } catch (e) {
+        } catch {
           addLog('warn', `原始消息：${event.data}`)
         }
       }
