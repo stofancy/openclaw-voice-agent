@@ -12,12 +12,15 @@ import signal
 import sys
 import threading
 import queue
+import tempfile
+import struct
 from datetime import datetime
 from pathlib import Path
 
 import websockets
 import requests
 from dashscope.audio.qwen_tts_realtime import QwenTtsRealtime, QwenTtsRealtimeCallback, AudioFormat
+from dashscope.audio.asr import Recognition
 import dashscope
 from dotenv import load_dotenv
 
@@ -399,9 +402,12 @@ class AgentGateway:
             })
             log("📤 发送 status=recognizing", "DEBUG")
             
-            # TODO: 调用百炼 STT API
-            # 暂时使用占位符
-            stt_text = "识别的文本"  # 需要调用 STT API
+            # 调用百炼 STT API
+            stt_text = self._call_stt_api(self.audio_buffer)
+            
+            if not stt_text:
+                log("⚠️  STT 识别失败，使用默认文本", "WARN")
+                stt_text = "你好"
             
             log(f"📝 STT 识别结果：{stt_text}")
             
@@ -437,6 +443,46 @@ class AgentGateway:
                 log("✅ TTS 调用完成", "DEBUG")
         except Exception as e:
             log(f"❌ _process_speech_end 错误：{e}", "ERROR")
+    
+    def _call_stt_api(self, audio_data: bytes) -> str:
+        """调用百炼 STT API"""
+        try:
+            # 创建临时 WAV 文件
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+                # 写入 WAV 头
+                f.write(self._create_wav_header(len(audio_data), 16000, 1, 2))
+                f.write(audio_data)
+                temp_path = f.name
+            
+            try:
+                # 调用识别 API
+                log("📞 调用百炼 STT...", "INFO")
+                recognition = Recognition()
+                result = recognition.call(temp_path)
+                
+                if result.status_code == 200:
+                    text = result.get('output', {}).get('text', '')
+                    log(f"✅ STT 成功：{text}", "INFO")
+                    return text
+                else:
+                    log(f"❌ STT 失败：{result.message}", "ERROR")
+                    return ""
+            finally:
+                os.unlink(temp_path)
+                
+        except Exception as e:
+            log(f"❌ STT 异常：{e}", "ERROR")
+            return ""
+    
+    def _create_wav_header(self, data_len, sample_rate, channels, sample_width):
+        """创建 WAV 文件头"""
+        byte_rate = sample_rate * channels * sample_width
+        block_align = channels * sample_width
+        
+        header = struct.pack('<4sI4s', b'RIFF', 36 + data_len, b'WAVE')
+        header += struct.pack('<4sIHHIIHH', b'fmt ', 16, 1, channels, sample_rate, byte_rate, block_align, sample_width * 8)
+        header += struct.pack('<4sI', b'data', data_len)
+        return header
     
     async def handle_json(self, message: str) -> None:
         """处理 JSON 消息"""
