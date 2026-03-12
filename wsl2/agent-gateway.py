@@ -90,19 +90,24 @@ class TTSCallback(QwenTtsRealtimeCallback):
             data = json.loads(response) if isinstance(response, str) else response
             event_type = data.get('type', 'unknown')
             
+            log(f"📥 TTS 回调事件：{event_type}", "DEBUG")
+            
             if event_type == 'session.created':
                 session_id = data.get('session', {}).get('id', 'unknown')
                 log(f"📋 TTS 会话创建：{session_id}")
             
             elif event_type == 'response.audio.delta':
                 audio_b64 = data.get('delta', '')
+                log(f"🎵 收到 TTS 音频块：{len(audio_b64)} bytes", "DEBUG")
                 if audio_b64:
                     self.audio_chunks.append(audio_b64)
+                    log(f"📤 发送音频到客户端...", "INFO")
                     # 实时转发到浏览器
                     self.gateway.send_audio_to_clients_sync(audio_b64)
+                    log(f"✅ 音频已发送到客户端", "DEBUG")
             
             elif event_type == 'response.done':
-                log(f"✅ TTS 响应完成")
+                log(f"✅ TTS 响应完成，共 {len(self.audio_chunks)} 个音频块")
             
             elif event_type == 'session.finished':
                 log(f"🔴 TTS 会话结束")

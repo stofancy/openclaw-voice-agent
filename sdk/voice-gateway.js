@@ -255,20 +255,16 @@ class VoiceGateway {
      * @private
      */
     _playNextInQueue() {
-        console.log('🎵 _playNextInQueue 调用，queue 长度:', this.audioQueue.length);
         if (this.audioQueue.length === 0) {
-            console.log('   队列为空，停止播放');
             this.isPlaying = false;
             return;
         }
         
         this.isPlaying = true;
         const samples = this.audioQueue.shift();
-        console.log('   取出 samples 长度:', samples.length);
         
         // 创建 AudioContext (首次调用时)
         if (!this.audioContext) {
-            console.log('   创建 AudioContext (24kHz)');
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 24000 // 匹配 TTS 输出采样率
             });
@@ -277,18 +273,14 @@ class VoiceGateway {
         // 创建 AudioBuffer
         const audioBuffer = this.audioContext.createBuffer(1, samples.length, 24000);
         audioBuffer.getChannelData(0).set(samples);
-        console.log('   创建 AudioBuffer:', audioBuffer.length, 'samples');
         
         // 创建音源并播放
         const source = this.audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(this.audioContext.destination);
         
-        console.log('   ▶️ 开始播放，预计时长:', (samples.length / 24000).toFixed(2), '秒');
-        
         // 播放完成后播放下一个
         source.onended = () => {
-            console.log('   ✅ 播放完成，播放下一个');
             setTimeout(() => this._playNextInQueue(), 50);
         };
         

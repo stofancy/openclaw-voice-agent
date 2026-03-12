@@ -844,26 +844,23 @@
                     },
                     onAudio: (audio) => {
                         console.log('🔊 收到 TTS 音频数据:', audio ? audio.length : 0, 'bytes');
-                        console.log('   _isPlayingTTS:', window._isPlayingTTS);
-                        console.log('   gateway:', gateway ? '存在' : 'null');
-                        console.log('   gateway.playAudio:', gateway && gateway.playAudio ? '存在' : 'null');
                         
-                        // 只播放一次，避免重复
-                        if (!window._isPlayingTTS && gateway && gateway.playAudio) {
+                        // 严格防重复：只要有音频在播放就跳过
+                        if (window._isPlayingTTS) {
+                            console.log('⚠️ TTS 正在播放，跳过新音频');
+                            return;
+                        }
+                        
+                        if (gateway && gateway.playAudio) {
                             window._isPlayingTTS = true;
                             console.log('▶️ 开始播放 TTS...');
                             gateway.playAudio(audio);
-                            // 播放完成后重置标志 (根据音频长度估算)
+                            
+                            // 播放完成后重置标志
                             setTimeout(() => { 
                                 window._isPlayingTTS = false;
                                 console.log('✅ TTS 播放完成');
                             }, 5000);
-                        } else {
-                            console.log('⚠️ TTS 播放被跳过:', {
-                                _isPlayingTTS: window._isPlayingTTS,
-                                hasGateway: !!gateway,
-                                hasPlayAudio: !!(gateway && gateway.playAudio)
-                            });
                         }
                     },
                     onStatus: (status) => {
