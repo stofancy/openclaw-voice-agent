@@ -463,7 +463,8 @@ class AgentGateway:
                 # 浏览器日志
                 level = data.get('level', 'log')
                 message = data.get('message', '')
-                log_event('browser', f'[{level.upper()}] {message}')
+                if message:
+                    log(f"🌐 BROWSER [{level.upper()}]: {message}")
             
             elif msg_type == 'audio_stream_start':
                 log("🎤 音频流开始")
