@@ -829,6 +829,7 @@
                         endCall();
                     },
                     onReply: (text) => {
+                        console.log('📥 收到 onReply:', text);
                         // 只更新一次字幕
                         if (!window._replyShown) {
                             window._replyShown = true;
@@ -837,21 +838,36 @@
                             console.log('🤖 Agent 回复:', text);
                             // 5 秒后重置
                             setTimeout(() => { window._replyShown = false; }, 5000);
+                        } else {
+                            console.log('⚠️ onReply 被跳过，_replyShown=', window._replyShown);
                         }
                     },
                     onAudio: (audio) => {
+                        console.log('🔊 收到 TTS 音频数据:', audio ? audio.length : 0, 'bytes');
+                        console.log('   _isPlayingTTS:', window._isPlayingTTS);
+                        console.log('   gateway:', gateway ? '存在' : 'null');
+                        console.log('   gateway.playAudio:', gateway && gateway.playAudio ? '存在' : 'null');
+                        
                         // 只播放一次，避免重复
                         if (!window._isPlayingTTS && gateway && gateway.playAudio) {
                             window._isPlayingTTS = true;
+                            console.log('▶️ 开始播放 TTS...');
                             gateway.playAudio(audio);
                             // 播放完成后重置标志 (根据音频长度估算)
                             setTimeout(() => { 
                                 window._isPlayingTTS = false;
                                 console.log('✅ TTS 播放完成');
                             }, 5000);
+                        } else {
+                            console.log('⚠️ TTS 播放被跳过:', {
+                                _isPlayingTTS: window._isPlayingTTS,
+                                hasGateway: !!gateway,
+                                hasPlayAudio: !!(gateway && gateway.playAudio)
+                            });
                         }
                     },
                     onStatus: (status) => {
+                        console.log('📥 收到 onStatus:', status);
                         if (status === 'recognizing') {
                             updateAgentStatus('listening', false);
                         } else if (status === 'processing') {
