@@ -213,6 +213,12 @@ class VoiceGateway {
      * @param {string} base64Audio - Base64 编码的 PCM 音频
      */
     _playAudioBase64(base64Audio) {
+        // 严格防重复：如果正在播放，直接拒绝
+        if (this.isPlaying) {
+            console.log('⚠️ _playAudioBase64: 正在播放，拒绝新音频');
+            return;
+        }
+        
         console.log('🎵 _playAudioBase64 调用，base64 长度:', base64Audio ? base64Audio.length : 0);
         try {
             // 解码 Base64
@@ -221,7 +227,6 @@ class VoiceGateway {
             for (let i = 0; i < binaryString.length; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
-            console.log('   Base64 解码后 bytes:', bytes.length);
             
             // PCM 16bit 转 Float32
             const samples = new Float32Array(bytes.length / 2);
@@ -230,19 +235,12 @@ class VoiceGateway {
                 const int16 = dataView.getInt16(i * 2, true); // little-endian
                 samples[i] = int16 / 32768.0;
             }
-            console.log('   PCM 转 Float32 samples:', samples.length);
             
             // 加入播放队列
             this.audioQueue.push(samples);
-            console.log('   audioQueue 长度:', this.audioQueue.length);
             
-            // 如果当前没有在播放，开始播放
-            if (!this.isPlaying) {
-                console.log('   ▶️ 开始播放队列...');
-                this._playNextInQueue();
-            } else {
-                console.log('   ⏸️ 已在播放，加入队列');
-            }
+            // 开始播放
+            this._playNextInQueue();
             
         } catch (error) {
             console.error("❌ 音频播放失败:", error);
