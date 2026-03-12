@@ -278,9 +278,19 @@ class VoiceGateway {
             });
         }
         
+        // 恢复 AudioContext（如果被挂起）
+        if (this.audioContext.state === 'suspended') {
+            console.log(`[播放] AudioContext 被挂起，恢复中...`);
+            this.audioContext.resume().then(() => {
+                console.log(`[播放] AudioContext 已恢复`);
+            });
+        }
+        
         // 创建 AudioBuffer
         const audioBuffer = this.audioContext.createBuffer(1, samples.length, 24000);
-        audioBuffer.getChannelData(0).set(samples);
+        
+        // 使用 copyToChannel 填充数据（MDN 推荐方式）
+        audioBuffer.copyToChannel(samples, 0);
         console.log(`[播放] 创建 AudioBuffer:`, audioBuffer.length, 'samples');
         
         // 创建音源并播放
@@ -289,6 +299,7 @@ class VoiceGateway {
         source.connect(this.audioContext.destination);
         
         console.log(`[播放] ▶️ 开始播放...`);
+        console.log(`[播放] AudioContext 状态:`, this.audioContext.state);
         
         // 播放状态监听
         source.onended = () => {
