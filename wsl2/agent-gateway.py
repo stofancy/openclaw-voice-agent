@@ -150,7 +150,8 @@ class AgentGateway:
     
     def init_tts(self):
         """初始化 TTS"""
-        if self.tts_realtime:
+        if self.tts_realtime and self.is_tts_connected:
+            log("TTS 已连接，跳过初始化", "INFO")
             return
         
         log("初始化 TTS...")
@@ -159,14 +160,20 @@ class AgentGateway:
             model=TTS_MODEL,
             callback=self.tts_callback,
         )
-        self.tts_realtime.connect()
-        self.tts_realtime.update_session(
-            voice=TTS_VOICE,
-            response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
-            mode='server_commit'
-        )
-        self.is_tts_connected = True
-        log("✅ TTS 初始化完成")
+        
+        try:
+            self.tts_realtime.connect()
+            self.tts_realtime.update_session(
+                voice=TTS_VOICE,
+                response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
+                mode='server_commit'
+            )
+            self.is_tts_connected = True
+            log("✅ TTS 初始化完成")
+        except Exception as e:
+            log(f"❌ TTS 初始化失败：{e}")
+            self.is_tts_connected = False
+            raise
     
     def send_to_agent(self, transcript: str) -> str:
         """发送语音识别文本给 Agent"""
@@ -228,7 +235,12 @@ class AgentGateway:
         log(f"🔊 TTS 合成：{text[:50]}...")
         
         try:
-            if not self.is_tts_connected:
+            # 检查并重连 TTS
+            if not self.is_tts_connected or not self.tts_realtime:
+                log("🔌 TTS 未连接，重新初始化...", "INFO")
+                self.tts_realtime = None
+                self.tts_callback = None
+                self.is_tts_connected = False
                 self.init_tts()
             
             # 分句发送（避免太长）
@@ -244,6 +256,8 @@ class AgentGateway:
         
         except Exception as e:
             log(f"❌ TTS 合成失败：{e}")
+            # 标记为未连接，下次会重连
+            self.is_tts_connected = False
     
     def send_audio_to_clients_sync(self, audio_b64):
         """发送音频到客户端（同步版本，用于回调）"""
