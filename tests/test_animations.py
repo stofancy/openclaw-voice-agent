@@ -344,6 +344,49 @@ class TestAccessibility:
                    "reduced-motion 应禁用或减少动画时长"
 
 
+class TestAdditionalCoverage:
+    """额外测试覆盖"""
+    
+    def test_shake_animation_exists(self):
+        """测试 shake 抖动动画存在（用于错误状态）"""
+        css_content = read_css_content()
+        assert css_has_animation(css_content, 'shake'), "shake 动画未定义"
+    
+    def test_voice_animation_container_exists(self):
+        """测试 voice-animation 容器类存在"""
+        css_content = read_css_content()
+        assert css_has_class(css_content, 'voice-animation'), "voice-animation 类未定义"
+    
+    def test_voice_circle_exists(self):
+        """测试 voice-circle 类存在"""
+        css_content = read_css_content()
+        assert css_has_class(css_content, 'voice-circle'), "voice-circle 类未定义"
+    
+    def test_error_state_animation(self):
+        """测试 error 状态动画"""
+        css_content = read_css_content()
+        
+        # 检查 error 状态的 shake 动画
+        pattern = r'\.voice-animation\.error[^{]*\{[^}]*animation:[^}]*shake'
+        assert re.search(pattern, css_content, re.DOTALL), "error 状态应有 shake 动画"
+    
+    def test_btn_retry_animation(self):
+        """测试重试按钮动画"""
+        css_content = read_css_content()
+        
+        # 检查.btn-retry.clicked 动画
+        pattern = r'\.btn-retry\.clicked\s*\{[^}]*animation:[^}]*btnScale'
+        assert re.search(pattern, css_content), "重试按钮点击应有 btnScale 动画"
+    
+    def test_voice_ring_transparent_base(self):
+        """测试波纹环基础透明样式"""
+        css_content = read_css_content()
+        
+        # 检查.voice-ring 的基础 opacity: 0
+        pattern = r'\.voice-ring\s*\{[^}]*opacity:\s*0'
+        assert re.search(pattern, css_content, re.DOTALL), "voice-ring 基础样式应有 opacity: 0"
+
+
 class TestRuntimeAnimations:
     """运行时动画测试（需要服务运行，可选）"""
     
