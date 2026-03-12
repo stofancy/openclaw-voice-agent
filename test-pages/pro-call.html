@@ -812,6 +812,10 @@
                     url: WS_URL,
                     autoPlayAudio: true,
                     onConnected: () => {
+                        console.log('✅ VoiceGateway 已连接');
+                        // 发送浏览器日志到网关
+                        sendBrowserLogsToGateway();
+                        
                         updateCallStatusText('通话中');
                         updateAgentStatus('ready');
                         document.getElementById('btnHangup').disabled = false;
@@ -1022,6 +1026,37 @@
             document.getElementById('conversationLog').classList.remove('show');
         }
 
+        // 拦截所有 Console 日志并发送到网关
+        function sendBrowserLogsToGateway() {
+            if (!gateway || !gateway.isConnected()) return;
+            
+            // 拦截 console.log
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            
+            console.log = function(...args) {
+                originalLog.apply(console, args);
+                try {
+                    gateway.send({ type: 'browser_log', level: 'log', message: args.join(' ') });
+                } catch(e) {}
+            };
+            
+            console.error = function(...args) {
+                originalError.apply(console, args);
+                try {
+                    gateway.send({ type: 'browser_log', level: 'error', message: args.join(' ') });
+                } catch(e) {}
+            };
+            
+            console.warn = function(...args) {
+                originalWarn.apply(console, args);
+                try {
+                    gateway.send({ type: 'browser_log', level: 'warn', message: args.join(' ') });
+                } catch(e) {}
+            };
+        }
+        
         // 页面加载
         window.addEventListener('DOMContentLoaded', () => {
             console.log('📱 页面已加载');
