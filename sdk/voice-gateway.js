@@ -277,10 +277,9 @@ class VoiceGateway {
         source.buffer = audioBuffer;
         source.connect(this.audioContext.destination);
         
-        // 播放完成后播放下一个
+        // 播放完成后播放下一个（不延迟）
         source.onended = () => {
-            // 等待一小段时间确保播放完全结束
-            setTimeout(() => this._playNextInQueue(), 100);
+            this._playNextInQueue();
         };
         
         source.start(0);
