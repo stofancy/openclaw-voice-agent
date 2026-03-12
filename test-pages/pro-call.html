@@ -829,12 +829,23 @@
                         endCall();
                     },
                     onReply: (text) => {
-                        addLogEntry(text, 'agent');
-                        updateSubtitle(text, 'agent', true);
+                        // 只更新一次字幕
+                        if (!window._replyShown) {
+                            window._replyShown = true;
+                            addLogEntry(text, 'agent');
+                            updateSubtitle(text, 'agent', true);
+                            // 5 秒后重置
+                            setTimeout(() => { window._replyShown = false; }, 5000);
+                        }
                     },
                     onAudio: (audio) => {
-                        // SDK 自动播放 TTS
-                        gateway.playAudio(audio);
+                        // 只播放一次，避免重复
+                        if (!window._isPlayingTTS) {
+                            window._isPlayingTTS = true;
+                            gateway.playAudio(audio);
+                            // 播放完成后重置标志
+                            setTimeout(() => { window._isPlayingTTS = false; }, 5000);
+                        }
                     },
                     onStatus: (status) => {
                         if (status === 'recognizing') {

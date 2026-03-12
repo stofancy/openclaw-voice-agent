@@ -477,7 +477,7 @@ class AgentGateway:
                 
                 callback = MyCallback()
                 recognition = Recognition(
-                    model='paraformer-v2',
+                    model='paraformer-realtime-v2',
                     callback=callback,
                     format='wav',
                     sample_rate=16000,
