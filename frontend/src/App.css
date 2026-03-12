@@ -156,3 +156,111 @@ header p {
 .log.error .message {
   color: #f44336;
 }
+
+/* 字幕区域 */
+.subtitle-section {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 30px;
+  border: 2px solid #e0e0e0;
+}
+
+.subtitle-section h2 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.3rem;
+  color: #333;
+}
+
+.subtitles {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.subtitle-empty {
+  text-align: center;
+  color: #999;
+  padding: 30px;
+  font-style: italic;
+}
+
+.subtitle {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: all 0.2s;
+  align-items: flex-start;
+}
+
+.subtitle.user {
+  border-left: 4px solid #2196f3;
+  background: #e3f2fd;
+}
+
+.subtitle.ai {
+  border-left: 4px solid #4caf50;
+  background: #e8f5e9;
+}
+
+.subtitle.streaming {
+  opacity: 0.85;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.subtitle.final {
+  opacity: 1;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+.subtitle-role {
+  font-weight: 600;
+  min-width: 60px;
+  color: #555;
+}
+
+.subtitle-text {
+  flex: 1;
+  color: #333;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.cursor {
+  display: inline-block;
+  color: #2196f3;
+  animation: blink 1s step-end infinite;
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* 移动端优化 */
+@media (max-width: 600px) {
+  .subtitle {
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .subtitle-role {
+    min-width: auto;
+    font-size: 0.9rem;
+  }
+  
+  .subtitle-text {
+    font-size: 1rem;
+  }
+}

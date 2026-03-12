@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 interface LogEntry {
@@ -8,15 +8,25 @@ interface LogEntry {
   timestamp: string
 }
 
+interface Subtitle {
+  id: number
+  role: 'user' | 'ai'
+  text: string
+  isFinal: boolean
+  timestamp: string
+}
+
 function App() {
   const [status, setStatus] = useState<string>('准备就绪')
   const [isConnected, setIsConnected] = useState<boolean>(false)
   const [isMuted, setIsMuted] = useState<boolean>(false)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [ws, setWs] = useState<WebSocket | null>(null)
+  const [subtitles, setSubtitles] = useState<Subtitle[]>([])
   
   // 使用 useRef 避免在 effect 中依赖 ws
-  const wsRef = ws
+  const wsRef = useRef<WebSocket | null>(null)
+  const subtitleIdRef = useRef<number>(0)
 
   const addLog = (level: 'info' | 'warn' | 'error', message: string) => {
     setLogs(prev => [...prev.slice(-99), {
@@ -35,12 +45,16 @@ function App() {
         setIsConnected(true)
         addLog('info', '✅ WebSocket 已连接')
         setStatus('已连接')
+        wsRef.current = websocket
+        setWs(websocket)
       }
       
       websocket.onclose = () => {
         setIsConnected(false)
         addLog('warn', '⚠️ WebSocket 已断开')
         setStatus('已断开')
+        wsRef.current = null
+        setWs(null)
       }
       
       websocket.onerror = () => {
@@ -53,23 +67,164 @@ function App() {
           const data = JSON.parse(event.data)
           addLog('info', `📥 收到：${data.type}`)
           
+          // ========== 新消息类型（授权格式）==========
+          
+          // STT 增量结果（用户字幕 - 流式）
+          if (data.type === 'stt_partial' && data.text) {
+            setSubtitles(prev => {
+              const lastIndex = prev.findIndex(s => s.role === 'user' && !s.isFinal)
+              if (lastIndex !== -1) {
+                // 更新现有字幕
+                const updated = [...prev]
+                updated[lastIndex] = { ...updated[lastIndex], text: data.text, isFinal: false }
+                return updated
+              } else {
+                // 添加新字幕
+                return [...prev, {
+                  id: subtitleIdRef.current++,
+                  role: 'user',
+                  text: data.text,
+                  isFinal: false,
+                  timestamp: data.timestamp ?? new Date().toISOString()
+                }]
+              }
+            })
+          }
+          
+          // STT 最终结果（用户字幕 - 确认）
+          if (data.type === 'stt_final' && data.text) {
+            setSubtitles(prev => {
+              const lastIndex = prev.findIndex(s => s.role === 'user' && !s.isFinal)
+              if (lastIndex !== -1) {
+                // 更新现有字幕为最终状态
+                const updated = [...prev]
+                updated[lastIndex] = { ...updated[lastIndex], text: data.text, isFinal: true }
+                return updated
+              } else {
+                // 添加新字幕
+                return [...prev, {
+                  id: subtitleIdRef.current++,
+                  role: 'user',
+                  text: data.text,
+                  isFinal: true,
+                  timestamp: data.timestamp ?? new Date().toISOString()
+                }]
+              }
+            })
+          }
+          
+          // LLM 流式 token（AI 字幕 - 打字机效果）
+          if (data.type === 'llm_token' && data.text) {
+            setSubtitles(prev => {
+              const lastIndex = prev.findIndex(s => s.role === 'ai' && !s.isFinal)
+              if (lastIndex !== -1) {
+                // 追加 token 到现有字幕
+                const updated = [...prev]
+                updated[lastIndex] = { 
+                  ...updated[lastIndex], 
+                  text: updated[lastIndex].text + data.text,
+                  isFinal: false 
+                }
+                return updated
+              } else {
+                // 添加新字幕
+                return [...prev, {
+                  id: subtitleIdRef.current++,
+                  role: 'ai',
+                  text: data.text,
+                  isFinal: false,
+                  timestamp: data.timestamp ?? new Date().toISOString()
+                }]
+              }
+            })
+          }
+          
+          // LLM 完整回复（AI 字幕 - 完成）
+          if (data.type === 'llm_complete' && data.text) {
+            setSubtitles(prev => {
+              const lastIndex = prev.findIndex(s => s.role === 'ai' && !s.isFinal)
+              if (lastIndex !== -1) {
+                // 更新现有字幕为最终状态
+                const updated = [...prev]
+                updated[lastIndex] = { ...updated[lastIndex], text: data.text, isFinal: true }
+                return updated
+              } else {
+                // 添加新字幕
+                return [...prev, {
+                  id: subtitleIdRef.current++,
+                  role: 'ai',
+                  text: data.text,
+                  isFinal: true,
+                  timestamp: data.timestamp ?? new Date().toISOString()
+                }]
+              }
+            })
+          }
+          
+          // ========== 兼容旧格式 ==========
+          
+          // 处理回复事件（兼容旧格式）
           if (data.type === 'reply' && data.text) {
             setStatus(`🤖 Agent: ${data.text}`)
+            // 也添加为 AI 字幕
+            setSubtitles(prev => [...prev, {
+              id: subtitleIdRef.current++,
+              role: 'ai',
+              text: data.text,
+              isFinal: true,
+              timestamp: new Date().toISOString()
+            }])
+          }
+          
+          // 处理 STT 结果（兼容旧格式）
+          if (data.type === 'stt_result' && data.text) {
+            setSubtitles(prev => [...prev, {
+              id: subtitleIdRef.current++,
+              role: 'user',
+              text: data.text,
+              isFinal: true,
+              timestamp: new Date().toISOString()
+            }])
+          }
+          
+          // 处理字幕事件（兼容旧格式）
+          if (data.type === 'subtitle') {
+            const { role, text, is_final, timestamp } = data
+            setSubtitles(prev => {
+              const lastIndex = prev.findIndex(s => s.role === role && !s.isFinal)
+              if (lastIndex !== -1) {
+                const updated = [...prev]
+                if (is_final) {
+                  updated[lastIndex] = { ...updated[lastIndex], text, isFinal: true }
+                } else {
+                  updated[lastIndex] = { ...updated[lastIndex], text }
+                }
+                return updated
+              } else {
+                return [...prev, {
+                  id: subtitleIdRef.current++,
+                  role,
+                  text,
+                  isFinal: is_final ?? false,
+                  timestamp: timestamp ?? new Date().toISOString()
+                }]
+              }
+            })
           }
         } catch {
           addLog('warn', `原始消息：${event.data}`)
         }
       }
       
-      setWs(websocket)
     } catch (error) {
       addLog('error', `连接失败：${error}`)
     }
   }
 
   const disconnectWebSocket = () => {
-    if (ws) {
-      ws.close()
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
       setWs(null)
       addLog('info', '已断开连接')
     }
@@ -126,7 +281,7 @@ function App() {
     
     return () => {
       clearTimeout(timeoutId)
-      if (wsRef) wsRef.close()
+      if (wsRef.current) wsRef.current.close()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -141,6 +296,31 @@ function App() {
         <section className="status-section">
           <div className={`status ${isConnected ? 'connected' : 'disconnected'}`}>
             {status}
+          </div>
+        </section>
+
+        {/* 流式字幕区域 */}
+        <section className="subtitle-section">
+          <h2>📝 实时字幕</h2>
+          <div className="subtitles">
+            {subtitles.length === 0 ? (
+              <div className="subtitle-empty">暂无字幕</div>
+            ) : (
+              subtitles.map(subtitle => (
+                <div 
+                  key={subtitle.id} 
+                  className={`subtitle ${subtitle.role} ${subtitle.isFinal ? 'final' : 'streaming'}`}
+                >
+                  <span className="subtitle-role">
+                    {subtitle.role === 'user' ? '👤 你' : '🤖 AI'}
+                  </span>
+                  <span className="subtitle-text">
+                    {subtitle.text}
+                    {!subtitle.isFinal && <span className="cursor">▋</span>}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </section>
 

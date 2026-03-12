@@ -106,6 +106,9 @@ class STTCallback(ASRRealtimeCallback):
                     # 通知网关有增量结果
                     if self.partial_callback:
                         self.partial_callback(text, is_final=False)
+                    # 流式推送给前端（stt_partial）
+                    if self.gateway:
+                        asyncio.create_task(self.gateway.send_stt_partial_to_clients(text))
                     
             elif event_type == 'recognizer.result.completed':
                 # 完成识别结果
@@ -116,6 +119,9 @@ class STTCallback(ASRRealtimeCallback):
                     # 通知网关有最终结果
                     if self.partial_callback:
                         self.partial_callback(text, is_final=True)
+                    # 推送最终结果给前端（stt_final）
+                    if self.gateway:
+                        asyncio.create_task(self.gateway.send_stt_final_to_clients(text))
                     
             elif event_type == 'session.finished':
                 log(f"🔴 STT 会话结束")
@@ -602,12 +608,14 @@ class AgentGateway:
             reply = self.send_to_agent(stt_text)
             log(f"🤖 Agent 回复：{reply[:100]}...")
             
-            # 发送 Agent 回复 (用于字幕)
+            # 发送 Agent 回复（兼容旧格式 + 新格式 llm_complete）
             await self.send_to_clients_async({
                 "type": "reply",
                 "text": reply
             })
-            log(f"📤 发送 reply: {reply[:50]}...", "DEBUG")
+            # 发送 llm_complete（阶段一：完整回复；阶段二：流式 token）
+            await self.send_llm_complete_to_clients(reply)
+            log(f"📤 发送 reply + llm_complete: {reply[:50]}...", "DEBUG")
             
             # TTS 合成（TTS 已预初始化，降低延迟）
             if reply:
@@ -745,12 +753,14 @@ class AgentGateway:
             reply = self.send_to_agent(text)
             log_event('agent', reply[:50] + '...' if len(reply) > 50 else reply)
             
-            # 发送文本回复
+            # 发送文本回复（兼容旧格式 + 新格式 llm_complete）
             await self.send_to_clients_async({
                 "type": "reply",
                 "text": reply
             })
-            log(f"📤 发送 reply: {reply[:50]}...", "DEBUG")
+            # 发送 llm_complete
+            await self.send_llm_complete_to_clients(reply)
+            log(f"📤 发送 reply + llm_complete: {reply[:50]}...", "DEBUG")
             
             # 调用 TTS (同步)
             if reply:
@@ -772,6 +782,79 @@ class AgentGateway:
                 await client.send(response_json)
             except Exception as e:
                 log(f"发送失败：{e}")
+    
+    # ========== 授权的消息推送方法（阶段一）==========
+    
+    async def send_stt_partial_to_clients(self, text: str) -> None:
+        """发送 STT 增量结果到客户端（stt_partial）
+        
+        Args:
+            text: 增量识别文本
+        """
+        await self.send_to_clients_async({
+            "type": "stt_partial",
+            "text": text,
+            "timestamp": datetime.now().isoformat()
+        })
+        log(f"📤 发送 stt_partial: {text[:50]}...", "DEBUG")
+    
+    async def send_stt_final_to_clients(self, text: str) -> None:
+        """发送 STT 最终结果到客户端（stt_final）
+        
+        Args:
+            text: 最终识别文本
+        """
+        await self.send_to_clients_async({
+            "type": "stt_final",
+            "text": text,
+            "timestamp": datetime.now().isoformat()
+        })
+        log(f"📤 发送 stt_final: {text[:50]}...", "DEBUG")
+    
+    async def send_llm_token_to_clients(self, text: str) -> None:
+        """发送 LLM 流式 token 到客户端（llm_token）
+        
+        Args:
+            text: token 文本
+        """
+        await self.send_to_clients_async({
+            "type": "llm_token",
+            "text": text,
+            "timestamp": datetime.now().isoformat()
+        })
+        log(f"📤 发送 llm_token: {text[:50]}...", "DEBUG")
+    
+    async def send_llm_complete_to_clients(self, text: str) -> None:
+        """发送 LLM 完整回复到客户端（llm_complete）
+        
+        Args:
+            text: 完整回复文本
+        """
+        await self.send_to_clients_async({
+            "type": "llm_complete",
+            "text": text,
+            "timestamp": datetime.now().isoformat()
+        })
+        log(f"📤 发送 llm_complete: {text[:50]}...", "DEBUG")
+    
+    # ========== 兼容旧版本（保留）==========
+    
+    async def send_subtitle_to_clients(self, text: str, role: str, is_final: bool = False) -> None:
+        """发送字幕到客户端（流式）- 兼容旧版本
+        
+        Args:
+            text: 字幕文本
+            role: 角色 ('user' 或 'ai')
+            is_final: 是否为最终结果
+        """
+        await self.send_to_clients_async({
+            "type": "subtitle",
+            "role": role,
+            "text": text,
+            "is_final": is_final,
+            "timestamp": datetime.now().isoformat()
+        })
+        log(f"📤 发送字幕：[{role}] {text[:50]}...", "DEBUG")
     
     async def run(self, host="0.0.0.0", port=PORT):
         """运行服务器"""
