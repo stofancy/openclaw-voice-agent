@@ -213,12 +213,6 @@ class VoiceGateway {
      * @param {string} base64Audio - Base64 编码的 PCM 音频
      */
     _playAudioBase64(base64Audio) {
-        // 严格防重复：如果正在播放，直接拒绝
-        if (this.isPlaying) {
-            console.log('⚠️ _playAudioBase64: 正在播放，拒绝新音频');
-            return;
-        }
-        
         console.log('🎵 _playAudioBase64 调用，base64 长度:', base64Audio ? base64Audio.length : 0);
         try {
             // 解码 Base64
@@ -238,9 +232,15 @@ class VoiceGateway {
             
             // 加入播放队列
             this.audioQueue.push(samples);
+            console.log('   audioQueue 长度:', this.audioQueue.length);
             
-            // 开始播放
-            this._playNextInQueue();
+            // 如果当前没有在播放，开始播放
+            if (!this.isPlaying) {
+                console.log('   ▶️ 开始播放队列...');
+                this._playNextInQueue();
+            } else {
+                console.log('   ⏸️ 已在播放，加入队列等待');
+            }
             
         } catch (error) {
             console.error("❌ 音频播放失败:", error);
