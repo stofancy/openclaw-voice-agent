@@ -213,7 +213,9 @@ class VoiceGateway {
      * @param {string} base64Audio - Base64 编码的 PCM 音频
      */
     _playAudioBase64(base64Audio) {
-        console.log('🎵 _playAudioBase64 调用，base64 长度:', base64Audio ? base64Audio.length : 0);
+        const logPrefix = `[TTS #${this.audioQueue.length + 1}]`;
+        console.log(`${logPrefix} 🎵 _playAudioBase64 调用，base64 长度:`, base64Audio ? base64Audio.length : 0);
+        
         try {
             // 解码 Base64
             const binaryString = atob(base64Audio);
@@ -221,6 +223,7 @@ class VoiceGateway {
             for (let i = 0; i < binaryString.length; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
+            console.log(`${logPrefix}    Base64 解码后 bytes:`, bytes.length);
             
             // PCM 16bit 转 Float32
             const samples = new Float32Array(bytes.length / 2);
@@ -229,21 +232,22 @@ class VoiceGateway {
                 const int16 = dataView.getInt16(i * 2, true); // little-endian
                 samples[i] = int16 / 32768.0;
             }
+            console.log(`${logPrefix}    PCM 转 Float32 samples:`, samples.length);
             
             // 加入播放队列
             this.audioQueue.push(samples);
-            console.log('   audioQueue 长度:', this.audioQueue.length);
+            console.log(`${logPrefix}    audioQueue 长度:`, this.audioQueue.length);
             
             // 如果当前没有在播放，开始播放
             if (!this.isPlaying) {
-                console.log('   ▶️ 开始播放队列...');
+                console.log(`${logPrefix}    ▶️ 开始播放队列...`);
                 this._playNextInQueue();
             } else {
-                console.log('   ⏸️ 已在播放，加入队列等待');
+                console.log(`${logPrefix}    ⏸️ 已在播放，加入队列等待`);
             }
             
         } catch (error) {
-            console.error("❌ 音频播放失败:", error);
+            console.error(`${logPrefix} ❌ 音频播放失败:`, error);
             this.onError(new Error("音频播放失败：" + error.message));
         }
     }
@@ -253,16 +257,22 @@ class VoiceGateway {
      * @private
      */
     _playNextInQueue() {
+        console.log(`[播放] _playNextInQueue 调用，queue 长度:`, this.audioQueue.length);
+        
         if (this.audioQueue.length === 0) {
+            console.log(`[播放] 队列为空，停止播放`);
             this.isPlaying = false;
             return;
         }
         
         this.isPlaying = true;
         const samples = this.audioQueue.shift();
+        console.log(`[播放] 取出 samples 长度:`, samples.length);
+        console.log(`[播放] 预计播放时长:`, (samples.length / 24000).toFixed(3), '秒');
         
         // 创建 AudioContext (首次调用时)
         if (!this.audioContext) {
+            console.log(`[播放] 创建 AudioContext (24kHz)`);
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 24000 // 匹配 TTS 输出采样率
             });
@@ -271,14 +281,23 @@ class VoiceGateway {
         // 创建 AudioBuffer
         const audioBuffer = this.audioContext.createBuffer(1, samples.length, 24000);
         audioBuffer.getChannelData(0).set(samples);
+        console.log(`[播放] 创建 AudioBuffer:`, audioBuffer.length, 'samples');
         
         // 创建音源并播放
         const source = this.audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(this.audioContext.destination);
         
-        // 播放完成后播放下一个（不延迟）
+        console.log(`[播放] ▶️ 开始播放...`);
+        
+        // 播放状态监听
         source.onended = () => {
+            console.log(`[播放] ✅ 播放完成`);
+            this._playNextInQueue();
+        };
+        
+        source.onerror = (error) => {
+            console.error(`[播放] ❌ 播放错误:`, error);
             this._playNextInQueue();
         };
         
@@ -290,11 +309,10 @@ class VoiceGateway {
      * @param {string} base64Audio - Base64 编码的 PCM 音频
      */
     playAudio(base64Audio) {
-        // 再次检查播放状态
-        if (this.isPlaying) {
-            console.log('⚠️ playAudio: 正在播放，拒绝');
-            return;
-        }
+        console.log(`[playAudio] 调用，base64 长度:`, base64Audio ? base64Audio.length : 0);
+        console.log(`[playAudio] isPlaying:`, this.isPlaying);
+        console.log(`[playAudio] audioQueue 长度:`, this.audioQueue.length);
+        
         this._playAudioBase64(base64Audio);
     }
     
