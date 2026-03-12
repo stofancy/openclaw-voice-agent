@@ -2,6 +2,10 @@
 """
 OpenClaw Agent 实时语音网关
 集成 Architect Agent + 百炼 STT/TTS
+
+架构：依赖注入 + Handlers
+- 外部依赖通过 container 注入
+- 业务逻辑通过 handlers 处理
 """
 
 import asyncio
@@ -24,6 +28,9 @@ from dashscope.audio.qwen_tts_realtime import QwenTtsRealtime, QwenTtsRealtimeCa
 from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
 import dashscope
 from dotenv import load_dotenv
+
+# 依赖注入容器
+from .container import Container
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -162,9 +169,26 @@ class TTSCallback(QwenTtsRealtimeCallback):
 
 
 class AgentGateway:
-    """Agent 语音网关"""
+    """Agent 语音网关
     
-    def __init__(self):
+    使用依赖注入：
+    - container: 依赖注入容器
+    - handlers: 业务逻辑处理器
+    """
+    
+    def __init__(self, container: Container = None):
+        """初始化网关
+        
+        Args:
+            container: 依赖注入容器（可选，默认创建新实例）
+        """
+        # 依赖注入
+        self.container = container or Container()
+        self.stt_handler = self.container.stt_handler()
+        self.tts_handler = self.container.tts_handler()
+        self.agent_handler = self.container.agent_handler()
+        self.ws_handler = self.container.websocket_handler()
+        
         log("="*60)
         log("OpenClaw Agent 实时语音网关")
         log("="*60)
@@ -175,17 +199,19 @@ class AgentGateway:
         log(f"Port: {PORT}")
         log(f"Log file: {LOG_FILE}")
         log("="*60)
+        log("依赖注入：已加载 container 和 handlers")
+        log("="*60)
         
         self.clients = set()
         
-        # STT 相关
-        self.stt_realtime = None
+        # STT 相关（使用原生客户端，由 container 管理）
+        self.stt_client = self.container.stt_client()
         self.stt_callback = None
         self.is_stt_connected = False
         self.current_stt_text = ""  # 当前 STT 识别结果
         
-        # TTS 相关
-        self.tts_realtime = None
+        # TTS 相关（使用原生客户端，由 container 管理）
+        self.tts_client = self.container.tts_client()
         self.tts_callback = None
         self.is_tts_connected = False
         
@@ -218,8 +244,8 @@ class AgentGateway:
         log(f"VAD 配置：threshold={self.vad_threshold}, silence={self.silence_duration}s")
     
     def init_stt(self):
-        """初始化实时 STT"""
-        if self.stt_realtime and self.is_stt_connected:
+        """初始化实时 STT（使用 container 注入的客户端）"""
+        if self.stt_client and self.is_stt_connected:
             return
         
         log("初始化实时 STT...")
@@ -228,69 +254,75 @@ class AgentGateway:
         
         # 设置回调函数处理增量结果
         def on_stt_partial(text, is_final):
-            self.stt_partial_text = text
+            # 使用 handler 处理文本
+            cleaned_text = self.stt_handler.process_increment(text)
+            self.stt_partial_text = cleaned_text
             if is_final:
-                self.stt_final_text = text
+                # 使用 handler 验证最终结果
+                validated_text = self.stt_handler.process_final(cleaned_text)
+                self.stt_final_text = validated_text or cleaned_text
                 self.stt_event.set()  # 通知 STT 完成
-                log(f"✅ STT 最终结果：{text}")
+                log(f"✅ STT 最终结果：{self.stt_final_text}")
             else:
-                log(f"📝 STT 增量：{text}", "DEBUG")
+                log(f"📝 STT 增量：{cleaned_text}", "DEBUG")
         
         self.stt_callback.partial_callback = on_stt_partial
         
-        self.stt_realtime = Recognition(
-            model='paraformer-realtime-v2',
-            callback=self.stt_callback,
-            format='pcm',
-            sample_rate=16000,
-        )
+        # stt_client 由 container 注入，直接使用
+        self.stt_callback.on_open()  # 触发连接
+        self.is_stt_connected = True
         
         try:
-            self.is_stt_connected = True
-            log("✅ STT 初始化完成")
+            log("✅ STT 初始化完成（使用 container 注入的客户端）")
         except Exception as e:
             log(f"❌ STT 初始化失败：{e}", "ERROR")
             self.is_stt_connected = False
             raise
     
     def init_tts(self):
-        """初始化 TTS"""
-        if self.tts_realtime and self.is_tts_connected:
+        """初始化 TTS（使用 container 注入的客户端）"""
+        if self.tts_client and self.is_tts_connected:
             return
         
         log("初始化 TTS...")
         self.tts_callback = TTSCallback(self)
-        self.tts_realtime = QwenTtsRealtime(
-            model=TTS_MODEL,
-            callback=self.tts_callback,
+        
+        # tts_client 由 container 注入，直接使用
+        self.tts_client.connect()
+        self.tts_client.update_session(
+            voice=TTS_VOICE,
+            response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
+            mode='server_commit'
         )
+        self.is_tts_connected = True
         
         try:
-            self.tts_realtime.connect()
-            self.tts_realtime.update_session(
-                voice=TTS_VOICE,
-                response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
-                mode='server_commit'
-            )
-            self.is_tts_connected = True
-            log("✅ TTS 初始化完成")
+            log("✅ TTS 初始化完成（使用 container 注入的客户端）")
         except Exception as e:
             log(f"❌ TTS 初始化失败：{e}")
             self.is_tts_connected = False
             raise
     
     def send_to_agent(self, transcript: str) -> str:
-        """发送语音识别文本给 Agent"""
+        """发送语音识别文本给 Agent（使用 agent_handler 处理）"""
         log(f"🗣️  用户说：{transcript}")
         
         try:
+            # 使用 handler 预处理消息
+            processed_text = self.agent_handler.preprocess_message(transcript)
+            if not processed_text:
+                log("⚠️  消息无效，使用默认文本")
+                processed_text = "你好"
+            
+            log(f"📝 预处理后消息：{processed_text}")
+            
             # 使用 OpenClaw CLI 调用 Agent
             import subprocess
             
             # 获取默认会话 ID (从环境或配置文件)
             session_id = os.getenv("OPENCLAW_SESSION_ID", "")
             
-            cmd = ["openclaw", "agent", "--message", f"[VOICE] {transcript}", "--json"]
+            cmd = ["openclaw", "agent", "--message", f"[VOICE] {processed_text}", "--json"]
             
             if session_id:
                 # 使用指定会话
@@ -313,7 +345,9 @@ class AgentGateway:
                 # 提取回复内容
                 payloads = response.get('result', {}).get('payloads', [])
                 if payloads:
-                    reply = payloads[0].get('text', '')
+                    raw_reply = payloads[0].get('text', '')
+                    # 使用 handler 处理响应
+                    reply = self.agent_handler.process_response(raw_reply)
                     log(f"🤖  Agent 回复：{reply[:100]}...")
                     return reply
                 else:
@@ -332,7 +366,7 @@ class AgentGateway:
             return "抱歉，出了点问题。"
     
     def call_tts(self, text: str) -> None:
-        """调用 TTS 合成语音 - 防止重叠播放"""
+        """调用 TTS 合成语音（使用 tts_handler 处理）- 防止重叠播放"""
         if not text:
             return
         
@@ -347,21 +381,29 @@ class AgentGateway:
         log(f"🔊 TTS 合成：{text[:50]}...")
         
         try:
+            # 使用 handler 预处理文本
+            processed_text = self.tts_handler.preprocess_text(text)
+            if not processed_text:
+                log("⚠️  TTS 文本无效，跳过")
+                return
+            
+            log(f"📝 预处理后 TTS 文本：{processed_text[:50]}...")
+            
             # 检查并重连 TTS
-            if not self.is_tts_connected or not self.tts_realtime:
+            if not self.is_tts_connected or not self.tts_client:
                 log("🔌 TTS 未连接，重新初始化...", "INFO")
-                self.tts_realtime = None
+                self.tts_client = None
                 self.tts_callback = None
                 self.is_tts_connected = False
                 self.init_tts()
             
             # 分句发送（避免太长）
-            sentences = text.split('。')
+            sentences = processed_text.split('.')
             for sentence in sentences:
                 if sentence.strip():
-                    self.tts_realtime.append_text(sentence + '。')
+                    self.tts_client.append_text(sentence + '.')
             
-            self.tts_realtime.finish()
+            self.tts_client.finish()
             self.tts_callback.wait_for_finished()
             
             log("✅ TTS 合成完成")
@@ -405,7 +447,7 @@ class AgentGateway:
             log(f"发送失败：{e}")
     
     async def handle_client(self, websocket):
-        """Handle browser WebSocket client"""
+        """Handle browser WebSocket client（使用 handlers 处理业务逻辑）"""
         client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
         log(f"🌐 浏览器客户端已连接 (IP: {client_ip})")
         self.clients.add(websocket)
@@ -532,7 +574,7 @@ class AgentGateway:
                         self.speech_start = None
     
     async def _process_speech_end(self) -> None:
-        """说话结束处理：STT → Agent → TTS (流式 STT + 并行优化)"""
+        """说话结束处理：STT → Agent → TTS (使用 handlers 处理业务逻辑)"""
         try:
             # 发送状态到客户端
             await self.send_to_clients_async({
@@ -542,16 +584,19 @@ class AgentGateway:
             log("📤 发送 status=recognizing", "DEBUG")
             
             # 结束 STT 识别
-            if self.is_stt_connected and self.stt_realtime:
+            if self.is_stt_connected and self.stt_client:
                 log("🛑 结束 STT 识别...", "INFO")
-                self.stt_realtime.stop()
+                self.stt_client.stop()
                 
                 # 等待 STT 完成 (最多 5 秒)
                 if self.stt_event.wait(timeout=5.0):
-                    stt_text = self.stt_final_text
+                    raw_text = self.stt_final_text
+                    # 使用 handler 验证最终结果
+                    stt_text = self.stt_handler.process_final(raw_text) or raw_text
                     log(f"✅ STT 完成：{stt_text}")
                 else:
-                    stt_text = self.stt_partial_text
+                    raw_text = self.stt_partial_text
+                    stt_text = self.stt_handler.process_increment(raw_text)
                     log(f"⏱️ STT 超时，使用部分结果：{stt_text}", "WARN")
             else:
                 log("⚠️  STT 未连接，使用备用方案", "WARN")
@@ -580,14 +625,14 @@ class AgentGateway:
             log("📤 发送 status=processing", "DEBUG")
             
             # 确保 TTS 连接正常（预初始化后应该已连接）
-            if not self.is_tts_connected or not self.tts_realtime:
+            if not self.is_tts_connected or not self.tts_client:
                 log("🔄 TTS 未连接，重新初始化...", "INFO")
                 try:
                     self.init_tts()
                 except Exception as e:
                     log(f"⚠️  TTS 重连失败：{e}", "WARN")
             
-            # 调用 Agent（同步）
+            # 调用 Agent（使用 handler 处理）
             reply = self.send_to_agent(stt_text)
             log(f"🤖 Agent 回复：{reply[:100]}...")
             
@@ -600,7 +645,7 @@ class AgentGateway:
             await self.send_llm_complete_to_clients(reply)
             log(f"📤 发送 reply + llm_complete: {reply[:50]}...", "DEBUG")
             
-            # TTS 合成（TTS 已预初始化，降低延迟）
+            # TTS 合成（使用 handler 处理，TTS 已预初始化，降低延迟）
             if reply:
                 log_event('tts', '开始合成语音')
                 self.call_tts(reply)
@@ -723,7 +768,7 @@ class AgentGateway:
             log(f"❌ 处理 JSON 失败：{e}", exc_info=True)
     
     async def process_stt_result(self, text: str) -> None:
-        """处理 STT 识别结果"""
+        """处理 STT 识别结果（使用 handlers 处理）"""
         log_event('speaking', f'用户说：{text}')
         
         try:
@@ -731,9 +776,15 @@ class AgentGateway:
             await self.send_to_clients_async({"type": "status", "status": "recognizing"})
             log("📤 发送 status=recognizing", "DEBUG")
             
-            # 调用 Agent (同步)
+            # 使用 handler 预处理文本
+            processed_text = self.stt_handler.process_final(text)
+            if not processed_text:
+                log("⚠️  STT 文本无效，使用默认文本", "WARN")
+                processed_text = "你好"
+            
+            # 调用 Agent (使用 handler 处理)
             log("⏳ 调用 Agent...", "INFO")
-            reply = self.send_to_agent(text)
+            reply = self.send_to_agent(processed_text)
             log_event('agent', reply[:50] + '...' if len(reply) > 50 else reply)
             
             # 发送文本回复（兼容旧格式 + 新格式 llm_complete）
@@ -745,7 +796,7 @@ class AgentGateway:
             await self.send_llm_complete_to_clients(reply)
             log(f"📤 发送 reply + llm_complete: {reply[:50]}...", "DEBUG")
             
-            # 调用 TTS (同步)
+            # 调用 TTS (使用 handler 处理)
             if reply:
                 log_event('tts', '开始合成语音')
                 self.call_tts(reply)
@@ -851,7 +902,11 @@ class AgentGateway:
 
 async def main():
     """主函数"""
-    gateway = AgentGateway()
+    # 创建依赖注入容器
+    container = Container()
+    
+    # 创建网关（注入 container）
+    gateway = AgentGateway(container=container)
     
     # 设置信号处理
     def signal_handler(sig, frame):

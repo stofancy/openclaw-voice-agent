@@ -13,10 +13,13 @@ wsl2/
 │   ├── tts_handler.py    # TTS 业务处理
 │   ├── agent_handler.py  # Agent 调用处理
 │   └── websocket_handler.py  # WebSocket 消息路由
-└── interfaces.py         # ⚠️ 已废弃
+├── agent-gateway.py      # 实时语音网关（主入口）
+└── README.md             # 本文件
 ```
 
-### 依赖注入容器 (container.py)
+---
+
+## 🔌 依赖注入容器 (container.py)
 
 使用 `dependency-injector` 管理所有外部依赖：
 
@@ -37,7 +40,19 @@ stt_client = container.stt_client()
 tts_client = container.tts_client()
 ```
 
-### Handlers 职责
+### 容器配置
+
+```python
+container = Container()
+container.config.from_dict({
+    'stt': {'model': 'paraformer-realtime-v2'},
+    'tts': {'model': 'qwen3-tts-instruct-flash-realtime'},
+})
+```
+
+---
+
+## 🛠️ Handlers 职责
 
 | Handler | 职责 | 可测试性 |
 |---------|------|---------|
@@ -51,42 +66,28 @@ tts_client = container.tts_client()
 1. **不重复造轮子** - 直接使用 DashScope 和 websockets 原生 API
 2. **业务逻辑可测试** - Handlers 不依赖具体 API 实现
 3. **依赖注入** - 外部依赖通过容器管理，易于替换和 Mock
-4. **代码整洁** - 废弃代码明确标记，避免混淆
-
----
-
-## ⚠️ 已废弃文件
-
-| 文件 | 替代方案 | 废弃原因 |
-|------|---------|---------|
-| `interfaces.py` | handlers 模块 | 抽象接口层增加不必要复杂度 |
-| `bailian_stt.py` | SttHandler + container | 重复封装 DashScope API |
-| `bailian_realtime_stt.py` | SttHandler + container | 重复封装 DashScope API |
+4. **代码整洁** - 无硬编码、无废弃代码
 
 ---
 
 ## 🚀 使用示例
 
-### 在新网关中使用
+### 在网关中使用
 
 ```python
 from wsl2.container import Container
+from wsl2.agent-gateway import AgentGateway
 
-class NewGateway:
-    def __init__(self):
-        self.container = Container()
-        self.stt_handler = self.container.stt_handler()
-        self.tts_handler = self.container.tts_handler()
-        self.ws_handler = self.container.websocket_handler()
-    
-    async def handle_audio(self, audio_data):
-        # 使用原生 API
-        stt_client = self.container.stt_client()
-        # ... 处理逻辑
-        
-        # 使用业务 handler
-        result = self.stt_handler.process_final(text)
-        # ... 处理逻辑
+# 创建容器
+container = Container()
+
+# 创建网关（依赖注入）
+gateway = AgentGateway(container=container)
+
+# 网关内部自动获取 handlers
+# self.stt_handler = container.stt_handler()
+# self.tts_handler = container.tts_handler()
+# self.agent_handler = container.agent_handler()
 ```
 
 ### 测试 Handlers
@@ -119,29 +120,59 @@ def test_stt_handler_process_final():
 
 ### 从旧代码迁移到新架构
 
-#### 旧代码
+#### 旧代码（硬编码）
 ```python
-from bailian_stt import BaiLianSTT
-
-stt = BaiLianSTT(api_key="xxx")
-text = stt.recognize(audio_path)
+class AgentGateway:
+    def __init__(self):
+        self.stt_realtime = Recognition(...)  # 硬编码
+        self.tts_realtime = QwenTtsRealtime(...)  # 硬编码
 ```
 
-#### 新代码
+#### 新代码（依赖注入）
 ```python
 from wsl2.container import Container
 
-container = Container()
-stt_handler = container.stt_handler()
-
-# 业务逻辑（文本处理）
-cleaned_text = stt_handler.process_final(raw_text)
-
-# 原生 API 调用（通过容器获取）
-stt_client = container.stt_client()
-# ... 使用 stt_client 调用 API
+class AgentGateway:
+    def __init__(self, container: Container):
+        self.stt_handler = container.stt_handler()  # 依赖注入
+        self.tts_handler = container.tts_handler()  # 依赖注入
+        self.agent_handler = container.agent_handler()  # 依赖注入
 ```
 
 ---
 
-*最后更新：2026-03-13*
+## ✅ 已删除废弃文件
+
+以下文件已在 2026-03-13 重构中删除：
+
+| 文件 | 替代方案 | 删除原因 |
+|------|---------|---------|
+| `audio-receiver-streaming.py` | agent-gateway.py | 功能已整合 |
+| `audio-receiver.py` | agent-gateway.py | 功能已整合 |
+| `bailian-gateway.py` | agent-gateway.py | 功能已整合 |
+| `bailian-gateway-simple.py` | agent-gateway.py | 功能已整合 |
+| `bailian-gateway-verbose.py` | agent-gateway.py | 功能已整合 |
+| `bailian_realtime_stt.py` | SttHandler + container | 重复封装 |
+| `bailian_stt.py` | SttHandler + container | 重复封装 |
+| `test-agent-call.py` | agent-gateway.py | 功能已整合 |
+| `interfaces.py` | handlers 模块 | 抽象接口层增加不必要复杂度 |
+
+---
+
+## 🎯 启动网关
+
+```bash
+cd ~/workspaces/audio-proxy
+python -m wsl2.agent-gateway
+```
+
+或：
+
+```bash
+cd ~/workspaces/audio-proxy/wsl2
+python agent-gateway.py
+```
+
+---
+
+*最后更新：2026-03-13 - 阶段 1.5-C 重构完成*
