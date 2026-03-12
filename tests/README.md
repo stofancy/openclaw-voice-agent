@@ -18,7 +18,7 @@
 
 | 框架 | 用途 | 用例数 | 状态 |
 |------|------|--------|------|
-| **Selenium** | UI 自动化 | 6 用例 | ⚠️ 需安装 |
+| **Playwright** | UI 自动化 | 24 用例 | ✅ 已实现 |
 | **原生 JS** | 单元测试 | 待实现 | ❌ |
 
 ---
@@ -40,7 +40,7 @@
 
 | 文件 | 描述 | 运行命令 |
 |------|------|----------|
-| `test_frontend.py` | Selenium UI 测试 | `pip install selenium && python3 tests/test_frontend.py` |
+| `test_frontend_playwright.py` | Playwright UI 测试 (24 用例) | `pip install playwright && playwright install && python3 tests/test_frontend_playwright.py` |
 
 ---
 
