@@ -834,17 +834,21 @@
                             window._replyShown = true;
                             addLogEntry(text, 'agent');
                             updateSubtitle(text, 'agent', true);
+                            console.log('🤖 Agent 回复:', text);
                             // 5 秒后重置
                             setTimeout(() => { window._replyShown = false; }, 5000);
                         }
                     },
                     onAudio: (audio) => {
                         // 只播放一次，避免重复
-                        if (!window._isPlayingTTS) {
+                        if (!window._isPlayingTTS && gateway && gateway.playAudio) {
                             window._isPlayingTTS = true;
                             gateway.playAudio(audio);
-                            // 播放完成后重置标志
-                            setTimeout(() => { window._isPlayingTTS = false; }, 5000);
+                            // 播放完成后重置标志 (根据音频长度估算)
+                            setTimeout(() => { 
+                                window._isPlayingTTS = false;
+                                console.log('✅ TTS 播放完成');
+                            }, 5000);
                         }
                     },
                     onStatus: (status) => {
@@ -883,7 +887,14 @@
             
             console.log('📴 结束通话...');
             
+            // 立即停止音频采集
             stopAudioCapture();
+            
+            // 停止 TTS 播放
+            if (gateway && gateway.stopAudio) {
+                gateway.stopAudio();
+            }
+            window._isPlayingTTS = false;
 
             if (gateway) {
                 gateway.disconnect();
@@ -906,6 +917,12 @@
             updateUserStatus(false);
             updateVolume(0);
             
+            // 清除字幕
+            const agentSubtitle = document.getElementById('agentSubtitle');
+            const userSubtitle = document.getElementById('userSubtitle');
+            if (agentSubtitle) agentSubtitle.textContent = '';
+            if (userSubtitle) userSubtitle.textContent = '';
+            
             const btnCall = document.getElementById('btnCall');
             const btnHangup = document.getElementById('btnHangup');
             const btnMic = document.getElementById('btnMic');
@@ -919,6 +936,7 @@
             isSpeaking = false;
             isStreaming = false;
             isCallEnding = false;
+            window._replyShown = false;
             
             console.log('✅ 通话已结束，资源已清理');
         }
@@ -932,6 +950,10 @@
                 btn.classList.add('muted');
                 btn.textContent = '🔇';
                 updateCallStatusText('已静音');
+                
+                // 静音时立即停止音量动画
+                updateVolume(0);
+                updateUserStatus(false);
             } else {
                 btn.classList.remove('muted');
                 btn.textContent = '🎤';
@@ -944,24 +966,28 @@
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
             function update() {
-                if (!analyser) return;
+                if (!analyser || isCallEnding) return;
 
                 analyser.getByteFrequencyData(dataArray);
                 const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                updateVolume(average);
+                
+                // 静音时不更新音量动画
+                if (!isMuted && !isCallEnding) {
+                    updateVolume(average);
 
-                // 检测说话状态
-                if (average > 30 && !isMuted) {
-                    if (!isSpeaking) {
-                        isSpeaking = true;
-                        updateUserStatus(true);
-                        updateCallStatusText('正在说话...');
-                    }
-                } else {
-                    if (isSpeaking) {
-                        isSpeaking = false;
-                        updateUserStatus(false);
-                        updateCallStatusText('通话中');
+                    // 检测说话状态
+                    if (average > 30) {
+                        if (!isSpeaking) {
+                            isSpeaking = true;
+                            updateUserStatus(true);
+                            updateCallStatusText('正在说话...');
+                        }
+                    } else {
+                        if (isSpeaking) {
+                            isSpeaking = false;
+                            updateUserStatus(false);
+                            updateCallStatusText('通话中');
+                        }
                     }
                 }
 
