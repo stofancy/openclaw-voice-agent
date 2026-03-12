@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """
+⚠️ DEPRECATED - 已废弃
+
 百炼实时语音识别 (STT) SDK
+
+此文件已废弃，请使用新的 handlers 模块：
+- wsl2/handlers/stt_handler.py (业务逻辑)
+- wsl2/container.py (依赖注入，使用原生 Recognition)
+
+废弃原因：
+1. 重复封装 DashScope ASRRealtime API
+2. 新方案直接使用原生 API + 依赖注入
+3. 业务逻辑已迁移到 handlers
+
+废弃日期：2026-03-13
 """
 
 import asyncio
@@ -9,7 +22,7 @@ import dashscope
 from dashscope.audio.asr_realtime import ASRRealtime, ASRRealtimeCallback
 
 class STTCallback(ASRRealtimeCallback):
-    """STT 回调"""
+    """STT 回调 - DEPRECATED"""
     
     def __init__(self, gateway):
         self.gateway = gateway
@@ -53,7 +66,7 @@ class STTCallback(ASRRealtimeCallback):
 
 
 class RealtimeSTT:
-    """实时语音识别"""
+    """实时语音识别 - DEPRECATED"""
     
     def __init__(self, api_key):
         self.api_key = api_key

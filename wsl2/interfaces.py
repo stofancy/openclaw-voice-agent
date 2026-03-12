@@ -1,9 +1,25 @@
+# ⚠️ DEPRECATED - 已废弃
+# 此文件已废弃，请使用新的 handlers 模块：
+# - wsl2/handlers/stt_handler.py
+# - wsl2/handlers/tts_handler.py
+# - wsl2/handlers/agent_handler.py
+# - wsl2/handlers/websocket_handler.py
+# 
+# 依赖注入容器：wsl2/container.py
+#
+# 废弃原因：
+# 1. 抽象接口层增加不必要的复杂度
+# 2. 直接使用 DashScope 原生 API 更简洁
+# 3. 业务逻辑已迁移到 handlers 模块
+#
+# 废弃日期：2026-03-13
+
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Generator
 
 
 class WsClient(ABC):
-    """WebSocket 客户端接口"""
+    """WebSocket 客户端接口 - DEPRECATED"""
     
     @abstractmethod
     async def send(self, data: dict) -> None:
@@ -22,7 +38,7 @@ class WsClient(ABC):
 
 
 class SttApi(ABC):
-    """STT API 接口"""
+    """STT API 接口 - DEPRECATED"""
     
     @abstractmethod
     def start(self) -> None:
@@ -41,7 +57,7 @@ class SttApi(ABC):
 
 
 class TtsApi(ABC):
-    """TTS API 接口"""
+    """TTS API 接口 - DEPRECATED"""
     
     @abstractmethod
     def connect(self) -> None:
@@ -60,7 +76,7 @@ class TtsApi(ABC):
 
 
 class AgentClient(ABC):
-    """Agent 调用接口"""
+    """Agent 调用接口 - DEPRECATED"""
     
     @abstractmethod
     def call(self, message: str) -> str:
