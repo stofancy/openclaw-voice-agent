@@ -149,6 +149,7 @@ class AgentGateway:
         
         # TTS 播放状态
         self.is_playing_tts = False  # 是否正在播放 TTS
+        self.tts_playing_lock = threading.Lock()  # TTS 播放锁
         
         log("网关初始化完成")
         log("等待客户端连接...")
@@ -237,12 +238,14 @@ class AgentGateway:
         if not text:
             return
         
-        # 如果正在播放，等待完成
-        if self.is_playing_tts:
-            log("⏳ TTS 正在播放，等待...", "INFO")
-            return
+        # 使用锁确保线程安全
+        with self.tts_playing_lock:
+            if self.is_playing_tts:
+                log("⏳ TTS 正在播放，跳过", "INFO")
+                return
+            
+            self.is_playing_tts = True
         
-        self.is_playing_tts = True
         log(f"🔊 TTS 合成：{text[:50]}...")
         
         try:
@@ -269,7 +272,8 @@ class AgentGateway:
             log(f"❌ TTS 合成失败：{e}")
             self.is_tts_connected = False
         finally:
-            self.is_playing_tts = False
+            with self.tts_playing_lock:
+                self.is_playing_tts = False
     
     def send_audio_to_clients_sync(self, audio_b64):
         """发送音频到客户端（同步版本，用于回调）"""
@@ -453,7 +457,7 @@ class AgentGateway:
             log(f"❌ _process_speech_end 错误：{e}", "ERROR")
     
     def _call_stt_api(self, audio_data: bytes) -> str:
-        """调用百炼 STT API"""
+        """调用百炼 STT API - 异步识别"""
         try:
             # 创建临时 WAV 文件
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
@@ -463,9 +467,21 @@ class AgentGateway:
                 temp_path = f.name
             
             try:
-                # 调用识别 API
+                # 调用识别 API (异步方式)
                 log("📞 调用百炼 STT...", "INFO")
-                recognition = Recognition()
+                from dashscope.audio.asr import RecognitionCallback
+                
+                class MyCallback(RecognitionCallback):
+                    def on_event(self, result):
+                        pass
+                
+                callback = MyCallback()
+                recognition = Recognition(
+                    model='paraformer-v2',
+                    callback=callback,
+                    format='wav',
+                    sample_rate=16000,
+                )
                 result = recognition.call(temp_path)
                 
                 if result.status_code == 200:
