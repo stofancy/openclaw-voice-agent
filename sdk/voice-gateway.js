@@ -331,12 +331,28 @@ class VoiceGateway {
      * 停止播放
      */
     stopAudio() {
+        console.log('[stopAudio] 停止播放...');
+        
+        // 清空队列
         this.audioQueue = [];
+        console.log('[stopAudio] 队列已清空');
+        
+        // 停止播放
         this.isPlaying = false;
+        console.log('[stopAudio] isPlaying = false');
+        
+        // 关闭 AudioContext
         if (this.audioContext) {
-            this.audioContext.close();
+            console.log('[stopAudio] 关闭 AudioContext...');
+            this.audioContext.close().then(() => {
+                console.log('[stopAudio] AudioContext 已关闭');
+            }).catch(err => {
+                console.error('[stopAudio] 关闭 AudioContext 失败:', err);
+            });
             this.audioContext = null;
         }
+        
+        console.log('[stopAudio] 停止完成');
     }
 }
 
