@@ -294,6 +294,163 @@ async def test_tts_playback_flag(browser):
     finally:
         await page.close()
 
+async def test_mic_permission(browser):
+    """测试 7: 麦克风权限"""
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.END}")
+    print(f"{Colors.BLUE}🧪 测试 7: 麦克风权限{Colors.END}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.END}")
+    
+    page = await browser.new_page()
+    
+    try:
+        # 授予麦克风权限
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        await context.grant_permissions(['microphone'])
+        
+        await page.goto("http://localhost:8080/test-pages/pro-call.html")
+        await page.wait_for_selector('.call-area')
+        
+        # 测试 navigator.mediaDevices 存在
+        has_media_devices = await page.evaluate("""
+            !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+        """)
+        test("mediaDevices API 存在", has_media_devices, "API 可用")
+        
+        # 测试 getUserMedia 函数
+        mic_test_result = await page.evaluate("""
+            (async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const tracks = stream.getAudioTracks();
+                    stream.getTracks().forEach(track => track.stop());
+                    return {
+                        success: true,
+                        hasAudioTracks: tracks.length > 0,
+                        trackLabel: tracks[0]?.label || 'unknown'
+                    };
+                } catch (error) {
+                    return {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            })()
+        """)
+        
+        test("getUserMedia 调用成功", mic_test_result['success'], 
+             f"结果：{mic_test_result}")
+        
+        if mic_test_result.get('hasAudioTracks'):
+            test("获取到音频轨道", True, 
+                 f"轨道标签：{mic_test_result.get('trackLabel')}")
+        else:
+            test("获取到音频轨道", False, "无音频轨道")
+        
+        return True
+    except Exception as e:
+        test("麦克风权限", False, str(e))
+        return False
+    finally:
+        await page.close()
+
+async def test_websocket_connection(browser):
+    """测试 8: WebSocket 连接"""
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.END}")
+    print(f"{Colors.BLUE}🧪 测试 8: WebSocket 连接{Colors.END}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.END}")
+    
+    page = await browser.new_page()
+    
+    try:
+        await page.goto("http://localhost:8080/test-pages/pro-call.html")
+        await page.wait_for_selector('.call-area')
+        
+        # 测试 WebSocket 构造函数存在
+        has_websocket = await page.evaluate("!!WebSocket")
+        test("WebSocket API 存在", has_websocket, "API 可用")
+        
+        # 测试 WebSocket 连接
+        ws_test_result = await page.evaluate("""
+            (async () => {
+                return new Promise((resolve) => {
+                    try {
+                        const ws = new WebSocket('ws://localhost:8765');
+                        
+                        ws.onopen = () => {
+                            ws.send(JSON.stringify({ type: 'connect' }));
+                        };
+                        
+                        ws.onmessage = (event) => {
+                            try {
+                                const data = JSON.parse(event.data);
+                                ws.close();
+                                resolve({
+                                    success: true,
+                                    connected: true,
+                                    responseType: data.type,
+                                    gateway: data.gateway
+                                });
+                            } catch (e) {
+                                ws.close();
+                                resolve({
+                                    success: false,
+                                    error: 'Parse error: ' + e.message
+                                });
+                            }
+                        };
+                        
+                        ws.onerror = (error) => {
+                            ws.close();
+                            resolve({
+                                success: false,
+                                error: 'WebSocket error'
+                            });
+                        };
+                        
+                        ws.onclose = () => {
+                            if (!ws.onmessage) {
+                                resolve({
+                                    success: false,
+                                    error: 'Connection closed without response'
+                                });
+                            }
+                        };
+                        
+                        // 超时处理
+                        setTimeout(() => {
+                            ws.close();
+                            resolve({
+                                success: false,
+                                error: 'Timeout'
+                            });
+                        }, 5000);
+                        
+                    } catch (error) {
+                        resolve({
+                            success: false,
+                            error: error.message
+                        });
+                    }
+                });
+            })()
+        """)
+        
+        test("WebSocket 连接成功", ws_test_result['success'], 
+             f"结果：{ws_test_result}")
+        
+        if ws_test_result.get('connected'):
+            test("收到连接响应", True, 
+                 f"type={ws_test_result.get('responseType')}, gateway={ws_test_result.get('gateway')}")
+        else:
+            test("收到连接响应", False, ws_test_result.get('error', '未知错误'))
+        
+        return True
+    except Exception as e:
+        test("WebSocket 连接", False, str(e))
+        return False
+    finally:
+        await page.close()
+
 async def run_all_tests():
     """运行所有前端测试"""
     print("\n")
@@ -323,6 +480,12 @@ async def run_all_tests():
             
             # 测试 6: TTS 播放标志
             await test_tts_playback_flag(browser)
+            
+            # 测试 7: 麦克风权限
+            await test_mic_permission(browser)
+            
+            # 测试 8: WebSocket 连接
+            await test_websocket_connection(browser)
             
         finally:
             await browser.close()
