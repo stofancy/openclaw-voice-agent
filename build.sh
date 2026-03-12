@@ -125,8 +125,20 @@ else
 fi
 echo ""
 
+# 运行 UI 状态测试
+echo -e "${BLUE}[7/6] 运行 UI 状态测试...${NC}"
+UI_RESULT=0
+python3 tests/test_ui_state.py || UI_RESULT=$?
+
+if [ $UI_RESULT -eq 0 ]; then
+    echo -e "${GREEN}✅ UI 状态测试通过 (48 用例)${NC}"
+else
+    echo -e "${RED}❌ UI 状态测试失败${NC}"
+fi
+echo ""
+
 # 运行覆盖率测试
-echo -e "${BLUE}[7/6] 运行代码覆盖率测试...${NC}"
+echo -e "${BLUE}[8/6] 运行代码覆盖率测试...${NC}"
 
 # 创建覆盖率配置
 cat > .coveragerc << EOF
@@ -190,7 +202,7 @@ fi
 echo ""
 
 # 生成测试报告
-echo -e "${BLUE}[8/6] 生成测试报告...${NC}"
+echo -e "${BLUE}[9/6] 生成测试报告...${NC}"
 
 cat > logs/build_report.txt << EOF
 ═══════════════════════════════════════════════════════════
