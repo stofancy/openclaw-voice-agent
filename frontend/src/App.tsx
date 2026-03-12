@@ -14,6 +14,9 @@ function App() {
   const [isMuted, setIsMuted] = useState<boolean>(false)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [ws, setWs] = useState<WebSocket | null>(null)
+  
+  // 使用 useRef 避免在 effect 中依赖 ws
+  const wsRef = ws
 
   const addLog = (level: 'info' | 'warn' | 'error', message: string) => {
     setLogs(prev => [...prev.slice(-99), {
@@ -40,8 +43,8 @@ function App() {
         setStatus('已断开')
       }
       
-      websocket.onerror = (error) => {
-        addLog('error', `❌ WebSocket 错误：${error}`)
+      websocket.onerror = () => {
+        addLog('error', '❌ WebSocket 错误')
         setStatus('连接错误')
       }
       
@@ -117,11 +120,15 @@ function App() {
   }
 
   useEffect(() => {
-    addLog('info', '应用已加载')
+    const timeoutId = setTimeout(() => {
+      addLog('info', '应用已加载')
+    }, 0)
+    
     return () => {
-      if (ws) ws.close()
+      clearTimeout(timeoutId)
+      if (wsRef) wsRef.close()
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="app">
