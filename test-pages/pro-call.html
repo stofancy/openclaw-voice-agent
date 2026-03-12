@@ -1058,6 +1058,13 @@
                 audioProcessor.disconnect();
                 audioProcessor = null;
                 
+                // 重置音量和说话状态
+                updateVolume(0);
+                updateUserStatus(false);
+                isSpeaking = false;
+                
+                console.log('✅ 音频采集已停止，音量归零');
+                
                 // 如果刚才有说话，触发 STT 识别
                 if (lastSpeakingDuration > 0.5) {
                     console.log(`📝 触发 STT 识别 (说话时长：${lastSpeakingDuration.toFixed(2)}s)`);
