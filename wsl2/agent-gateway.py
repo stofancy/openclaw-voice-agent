@@ -21,8 +21,7 @@ from pathlib import Path
 import websockets
 import requests
 from dashscope.audio.qwen_tts_realtime import QwenTtsRealtime, QwenTtsRealtimeCallback, AudioFormat
-from dashscope.audio.asr import Recognition
-from dashscope.audio.asr_realtime import ASRRealtime, ASRRealtimeCallback
+from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
 import dashscope
 from dotenv import load_dotenv
 
@@ -73,7 +72,7 @@ def log_event(event_type, details=""):
 dashscope.api_key = API_KEY
 
 
-class STTCallback(ASRRealtimeCallback):
+class STTCallback(RecognitionCallback):
     """实时 STT 回调"""
     
     def __init__(self, gateway):
@@ -85,46 +84,29 @@ class STTCallback(ASRRealtimeCallback):
     def on_open(self) -> None:
         log("✅ STT 连接已建立")
         
-    def on_close(self, close_status_code: int, close_msg: str) -> None:
-        log(f"🔴 STT 连接关闭：code={close_status_code}, msg={close_msg}")
+    def on_close(self) -> None:
+        log("🔴 STT 连接关闭")
         
-    def on_event(self, response: str) -> None:
+    def on_complete(self) -> None:
+        log("✅ STT 识别完成")
+        
+    def on_error(self, result: RecognitionResult) -> None:
+        log(f"❌ STT 错误：{result}")
+        
+    def on_event(self, result: RecognitionResult) -> None:
         try:
-            data = json.loads(response) if isinstance(response, str) else response
-            event_type = data.get('type', 'unknown')
+            # RecognitionResult 对象包含识别结果
+            text = getattr(result, 'text', '') or getattr(result, 'output', {}).get('text', '')
             
-            if event_type == 'session.created':
-                session_id = data.get('session', {}).get('id', 'unknown')
-                log(f"📋 STT 会话创建：{session_id}")
-                
-            elif event_type == 'recognizer.result.increment':
-                # 增量识别结果（流式）
-                text = data.get('result', {}).get('text', '')
-                if text:
-                    self.result_text = text
-                    log(f"📝 识别中：{text}", "DEBUG")
-                    # 通知网关有增量结果
-                    if self.partial_callback:
-                        self.partial_callback(text, is_final=False)
-                    # 流式推送给前端（stt_partial）
-                    if self.gateway:
-                        asyncio.create_task(self.gateway.send_stt_partial_to_clients(text))
-                    
-            elif event_type == 'recognizer.result.completed':
-                # 完成识别结果
-                text = data.get('result', {}).get('text', '')
-                if text:
-                    self.final_text = text
-                    log(f"✅ 识别完成：{text}")
-                    # 通知网关有最终结果
-                    if self.partial_callback:
-                        self.partial_callback(text, is_final=True)
-                    # 推送最终结果给前端（stt_final）
-                    if self.gateway:
-                        asyncio.create_task(self.gateway.send_stt_final_to_clients(text))
-                    
-            elif event_type == 'session.finished':
-                log(f"🔴 STT 会话结束")
+            if text:
+                self.result_text = text
+                log(f"📝 识别中：{text}", "DEBUG")
+                # 通知网关有增量结果
+                if self.partial_callback:
+                    self.partial_callback(text, is_final=False)
+                # 流式推送给前端（stt_partial）
+                if self.gateway:
+                    asyncio.create_task(self.gateway.send_stt_partial_to_clients(text))
                 
         except Exception as e:
             log(f'❌ STT 回调错误：{e}', "ERROR")
@@ -256,13 +238,14 @@ class AgentGateway:
         
         self.stt_callback.partial_callback = on_stt_partial
         
-        self.stt_realtime = ASRRealtime(
+        self.stt_realtime = Recognition(
             model='paraformer-realtime-v2',
             callback=self.stt_callback,
+            format='pcm',
+            sample_rate=16000,
         )
         
         try:
-            self.stt_realtime.connect()
             self.is_stt_connected = True
             log("✅ STT 初始化完成")
         except Exception as e:
@@ -485,7 +468,7 @@ class AgentGateway:
             # 流式 STT: 实时发送音频到百炼
             if is_voice and self.is_stt_connected and self.stt_realtime:
                 try:
-                    self.stt_realtime.send_audio(audio_data)
+                    self.stt_realtime.send_audio_frame(audio_data)
                     log(f"📤 发送音频到 STT: {len(audio_data)} bytes", "DEBUG")
                 except Exception as e:
                     log(f"⚠️  STT 发送失败：{e}", "WARN")
@@ -561,7 +544,7 @@ class AgentGateway:
             # 结束 STT 识别
             if self.is_stt_connected and self.stt_realtime:
                 log("🛑 结束 STT 识别...", "INFO")
-                self.stt_realtime.finish()
+                self.stt_realtime.stop()
                 
                 # 等待 STT 完成 (最多 5 秒)
                 if self.stt_event.wait(timeout=5.0):
