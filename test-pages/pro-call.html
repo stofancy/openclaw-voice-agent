@@ -59,6 +59,7 @@
             max-width: 480px; /* 限制最大宽度 */
             margin: 0 auto;
             position: relative;
+            overflow: hidden; /* 防止内容溢出 */
         }
 
         /* 桌面端限制最大高度 */
@@ -68,6 +69,52 @@
                 border-radius: 24px;
                 box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                 overflow: hidden;
+            }
+        }
+        
+        /* 小屏幕适配 */
+        @media (max-height: 600px) {
+            .app-header {
+                padding: 10px;
+            }
+            
+            .brand-logo {
+                font-size: 28px;
+            }
+            
+            .brand-name {
+                font-size: 14px;
+            }
+            
+            .call-area {
+                padding: 10px;
+            }
+            
+            .avatar-container {
+                width: 70px;
+                height: 70px;
+                font-size: 36px;
+            }
+            
+            .user-avatar-container {
+                width: 50px;
+                height: 50px;
+                font-size: 24px;
+            }
+            
+            .controls-area {
+                padding: 10px;
+            }
+            
+            .control-btn {
+                width: 55px;
+                height: 55px;
+                font-size: 22px;
+            }
+            
+            .subtitle {
+                font-size: 13px;
+                padding: 8px 12px;
             }
         }
 
@@ -104,6 +151,7 @@
             justify-content: space-between;
             padding: 20px;
             overflow: hidden;
+            min-height: 0; /* 关键：允许 flex 子项缩小 */
         }
 
         /* Agent 区域 */
@@ -268,7 +316,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px 0;
+            padding: 10px 0;
+            flex-shrink: 0; /* 防止被压缩 */
         }
 
         .user-avatar-container {
@@ -303,8 +352,10 @@
 
         /* 控制区域 */
         .controls-area {
-            padding: 20px;
+            padding: 15px;
             flex-shrink: 0;
+            background: rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
         }
 
         .controls-row {
@@ -807,6 +858,8 @@
 
         // 结束通话
         function endCall() {
+            console.log('📴 结束通话...');
+            
             stopAudioCapture();
 
             if (gateway) {
@@ -824,13 +877,26 @@
                 audioContext = null;
             }
 
+            // 重置所有状态
             updateCallStatusText('点击按钮开始通话');
             updateAgentStatus('ready');
-            document.getElementById('btnCall').disabled = false;
-            document.getElementById('btnHangup').disabled = true;
-            document.getElementById('btnMic').disabled = true;
-            document.getElementById('btnMic').classList.remove('muted');
+            updateUserStatus(false);
+            updateVolume(0);
+            
+            const btnCall = document.getElementById('btnCall');
+            const btnHangup = document.getElementById('btnHangup');
+            const btnMic = document.getElementById('btnMic');
+            
+            if (btnCall) btnCall.disabled = false;
+            if (btnHangup) btnHangup.disabled = true;
+            if (btnMic) btnMic.disabled = true;
+            if (btnMic) btnMic.classList.remove('muted');
+            
             isMuted = false;
+            isSpeaking = false;
+            isStreaming = false;
+            
+            console.log('✅ 通话已结束，资源已清理');
         }
 
         // 切换静音
