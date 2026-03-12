@@ -1097,49 +1097,7 @@
 
         // 拦截所有 Console 日志并发送到网关
         function sendBrowserLogsToGateway() {
-            if (!gateway || !gateway.isConnected()) return;
-
-            let logCount = 0;
-            const MAX_LOGS = 100; // 限制日志数量
-
-            // 拦截 console.log
-            const originalLog = console.log;
-            const originalError = console.error;
-            const originalWarn = console.warn;
-
-            console.log = function(...args) {
-                originalLog.apply(console, args);
-                logCount++;
-                if (logCount > MAX_LOGS) return; // 超过限制不再发送
-                try {
-                    const msg = args.join(' ');
-                    // 只发送重要日志
-                    if (msg.includes('📞') || msg.includes('🎤') || msg.includes('✅') || msg.includes('❌') || msg.includes('开始') || msg.includes('结束') || msg.includes('失败')) {
-                        gateway.send({ type: 'browser_log', level: 'log', message: msg });
-                    }
-                } catch(e) {}
-            };
-
-            console.error = function(...args) {
-                originalError.apply(console, args);
-                logCount++;
-                if (logCount > MAX_LOGS) return;
-                try {
-                    gateway.send({ type: 'browser_log', level: 'error', message: args.join(' ') });
-                } catch(e) {}
-            };
-
-            console.warn = function(...args) {
-                originalWarn.apply(console, args);
-                logCount++;
-                if (logCount > MAX_LOGS) return;
-                try {
-                    gateway.send({ type: 'browser_log', level: 'warn', message: args.join(' ') });
-                } catch(e) {}
-            };
-        }
-
-        // 拦截 Console 日志并发送到网关
+        // 拦截 Console 日志并发送到网关（统一拦截器，无限制）
         window._consoleLogs = [];
         window._pendingLogs = []; // 存储 gateway 连接前的日志
 
