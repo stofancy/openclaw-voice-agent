@@ -141,11 +141,14 @@ class AgentGateway:
         self.silence_start = None  # 静音开始时间
         self.last_audio_time = None  # 最后收到音频时间
         
-        # VAD 配置
-        self.vad_threshold = 0.1  # VAD 阈值 (0-1) - 降低灵敏度
-        self.silence_duration = 0.8  # 静音判定时间 (秒) - 缩短
-        self.min_speech_duration = 0.3  # 最小语音时长 (秒) - 缩短
+        # VAD 配置 - 优化避免误触发和重叠播放
+        self.vad_threshold = 0.2  # VAD 阈值 (0-1) - 提高避免误触发
+        self.silence_duration = 1.2  # 静音判定时间 (秒) - 延长避免打断
+        self.min_speech_duration = 0.5  # 最小语音时长 (秒)
         self.speech_start = None  # 说话开始时间
+        
+        # TTS 播放状态
+        self.is_playing_tts = False  # 是否正在播放 TTS
         
         log("网关初始化完成")
         log("等待客户端连接...")
@@ -154,7 +157,6 @@ class AgentGateway:
     def init_tts(self):
         """初始化 TTS"""
         if self.tts_realtime and self.is_tts_connected:
-            log("TTS 已连接，跳过初始化", "INFO")
             return
         
         log("初始化 TTS...")
@@ -231,10 +233,16 @@ class AgentGateway:
             return "抱歉，出了点问题。"
     
     def call_tts(self, text: str) -> None:
-        """调用 TTS 合成语音"""
+        """调用 TTS 合成语音 - 防止重叠播放"""
         if not text:
             return
         
+        # 如果正在播放，等待完成
+        if self.is_playing_tts:
+            log("⏳ TTS 正在播放，等待...", "INFO")
+            return
+        
+        self.is_playing_tts = True
         log(f"🔊 TTS 合成：{text[:50]}...")
         
         try:
@@ -259,8 +267,9 @@ class AgentGateway:
         
         except Exception as e:
             log(f"❌ TTS 合成失败：{e}")
-            # 标记为未连接，下次会重连
             self.is_tts_connected = False
+        finally:
+            self.is_playing_tts = False
     
     def send_audio_to_clients_sync(self, audio_b64):
         """发送音频到客户端（同步版本，用于回调）"""
@@ -341,11 +350,11 @@ class AgentGateway:
             log(f"❌ 处理音频流失败：{e}")
     
     def _process_vad(self, is_voice: bool, volume: float) -> None:
-        """VAD (Voice Activity Detection) 处理"""
+        """VAD (Voice Activity Detection) 处理 - 优化灵敏度"""
         now = datetime.now()
         
         if is_voice:
-            # 检测到声音
+            # 检测到声音 (提高阈值避免误触发)
             if not self.is_speaking:
                 # 开始说话
                 self.is_speaking = True
@@ -369,14 +378,13 @@ class AgentGateway:
                 else:
                     silence_duration = (now - self.silence_start).total_seconds()
                     
-                    # 检测说话结束
+                    # 检测说话结束 (延长静音判定时间)
                     if silence_duration >= self.silence_duration:
                         speech_duration = (now - self.speech_start).total_seconds()
                         
                         if speech_duration >= self.min_speech_duration:
                             # 说话结束，处理音频
                             log_event('speaking', f'结束 (持续 {speech_duration:.2f}s)')
-                            # 累积音频已经有数据了，直接处理
                             asyncio.create_task(self._process_speech_end())
                         else:
                             log(f"⚠️  语音太短 ({speech_duration:.2f}s)，忽略")

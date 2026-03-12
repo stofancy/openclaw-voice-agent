@@ -974,11 +974,7 @@
             const scriptProcessor = audioContext.createScriptProcessor(CHUNK_SIZE, 1, 1);
 
             scriptProcessor.onaudioprocess = (e) => {
-                // console.log('📊 onaudioprocess 触发');
-                if (isMuted || !gateway || !gateway.isConnected() || !isStreaming) {
-                    // console.log('⏹️ 跳过：isMuted='+isMuted+', gateway='+!!gateway+', connected='+!!(gateway&&gateway.isConnected())+', isStreaming='+isStreaming);
-                    return;
-                }
+                if (isMuted || !gateway || !gateway.isConnected() || !isStreaming) return;
 
                 const inputData = e.inputBuffer.getChannelData(0);
 
@@ -992,7 +988,6 @@
                 // 发送 PCM 数据
                 try {
                     gateway.ws.send(int16Data.buffer);
-                    // console.log('📤 发送音频：' + int16Data.length + ' samples');
                 } catch (err) {
                     console.error('❌ 发送音频失败:', err);
                 }
