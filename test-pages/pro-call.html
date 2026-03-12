@@ -42,7 +42,7 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         /* 桌面端 body 居中 */
         @media (min-width: 768px) {
             body {
@@ -71,47 +71,47 @@
                 overflow: hidden;
             }
         }
-        
+
         /* 小屏幕适配 */
         @media (max-height: 600px) {
             .app-header {
                 padding: 10px;
             }
-            
+
             .brand-logo {
                 font-size: 28px;
             }
-            
+
             .brand-name {
                 font-size: 14px;
             }
-            
+
             .call-area {
                 padding: 10px;
             }
-            
+
             .avatar-container {
                 width: 70px;
                 height: 70px;
                 font-size: 36px;
             }
-            
+
             .user-avatar-container {
                 width: 50px;
                 height: 50px;
                 font-size: 24px;
             }
-            
+
             .controls-area {
                 padding: 10px;
             }
-            
+
             .control-btn {
                 width: 55px;
                 height: 55px;
                 font-size: 22px;
             }
-            
+
             .subtitle {
                 font-size: 13px;
                 padding: 8px 12px;
@@ -533,11 +533,11 @@
             .controls-row {
                 gap: 15px;
             }
-            
+
             .brand-logo {
                 font-size: 40px;
             }
-            
+
             .brand-name {
                 font-size: 20px;
             }
@@ -728,11 +728,11 @@
                 subtitle = document.createElement('div');
                 subtitle.id = subtitleId;
                 subtitle.className = 'subtitle';
-                
-                const section = type === 'user' ? 
-                    document.querySelector('.user-section') : 
+
+                const section = type === 'user' ?
+                    document.querySelector('.user-section') :
                     document.querySelector('.agent-section');
-                
+
                 if (section) {
                     section.appendChild(subtitle);
                 }
@@ -773,11 +773,11 @@
         // 开始通话
         async function startCall() {
             console.log('📞 开始通话...');
-            
+
             // 禁用拨号按钮
             const btnCall = document.getElementById('btnCall');
             if (btnCall) btnCall.disabled = true;
-            
+
             updateCallStatusText('正在连接...');
             updateAgentStatus('connecting');
 
@@ -815,7 +815,7 @@
                         console.log('✅ VoiceGateway 已连接');
                         // 发送浏览器日志到网关
                         sendBrowserLogsToGateway();
-                        
+
                         updateCallStatusText('通话中');
                         updateAgentStatus('ready');
                         document.getElementById('btnHangup').disabled = false;
@@ -845,22 +845,9 @@
                     onAudio: (audio) => {
                         console.log('🔊 收到 TTS 音频数据:', audio ? audio.length : 0, 'bytes');
                         
-                        // 严格防重复：只要有音频在播放就跳过
-                        if (window._isPlayingTTS) {
-                            console.log('⚠️ TTS 正在播放，跳过新音频');
-                            return;
-                        }
-                        
+                        // 直接交给 SDK 处理（SDK 内部有 isPlaying 检查）
                         if (gateway && gateway.playAudio) {
-                            window._isPlayingTTS = true;
-                            console.log('▶️ 开始播放 TTS...');
                             gateway.playAudio(audio);
-                            
-                            // 播放完成后重置标志
-                            setTimeout(() => { 
-                                window._isPlayingTTS = false;
-                                console.log('✅ TTS 播放完成');
-                            }, 5000);
                         }
                     },
                     onStatus: (status) => {
@@ -890,19 +877,19 @@
 
         // 结束通话
         let isCallEnding = false;
-        
+
         function endCall() {
             if (isCallEnding) {
                 console.log('⚠️  通话已在结束中...');
                 return;
             }
             isCallEnding = true;
-            
+
             console.log('📴 结束通话...');
-            
+
             // 立即停止音频采集
             stopAudioCapture();
-            
+
             // 停止 TTS 播放
             if (gateway && gateway.stopAudio) {
                 gateway.stopAudio();
@@ -929,28 +916,28 @@
             updateAgentStatus('ready');
             updateUserStatus(false);
             updateVolume(0);
-            
+
             // 清除字幕
             const agentSubtitle = document.getElementById('agentSubtitle');
             const userSubtitle = document.getElementById('userSubtitle');
             if (agentSubtitle) agentSubtitle.textContent = '';
             if (userSubtitle) userSubtitle.textContent = '';
-            
+
             const btnCall = document.getElementById('btnCall');
             const btnHangup = document.getElementById('btnHangup');
             const btnMic = document.getElementById('btnMic');
-            
+
             if (btnCall) btnCall.disabled = false;
             if (btnHangup) btnHangup.disabled = true;
             if (btnMic) btnMic.disabled = true;
             if (btnMic) btnMic.classList.remove('muted');
-            
+
             isMuted = false;
             isSpeaking = false;
             isStreaming = false;
             isCallEnding = false;
             window._replyShown = false;
-            
+
             console.log('✅ 通话已结束，资源已清理');
         }
 
@@ -963,7 +950,7 @@
                 btn.classList.add('muted');
                 btn.textContent = '🔇';
                 updateCallStatusText('已静音');
-                
+
                 // 静音时立即停止音量动画
                 updateVolume(0);
                 updateUserStatus(false);
@@ -983,7 +970,7 @@
 
                 analyser.getByteFrequencyData(dataArray);
                 const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                
+
                 // 静音时不更新音量动画
                 if (!isMuted && !isCallEnding) {
                     updateVolume(average);
@@ -1020,7 +1007,7 @@
             console.log('   mediaStream:', mediaStream ? 'OK' : 'NULL');
             console.log('   gateway:', gateway ? 'OK' : 'NULL');
             console.log('   gateway.isConnected:', gateway ? gateway.isConnected() : 'N/A');
-            
+
             const scriptProcessor = audioContext.createScriptProcessor(CHUNK_SIZE, 1, 1);
 
             scriptProcessor.onaudioprocess = (e) => {
@@ -1050,7 +1037,7 @@
 
             isStreaming = true;
             console.log('✅ 音频采集已启动，isStreaming=true');
-            
+
             if (gateway && gateway.isConnected()) {
                 gateway.send({ type: 'audio_stream_start' });
                 console.log('📤 发送 audio_stream_start');
@@ -1060,7 +1047,7 @@
         }
 
         let lastSpeakingDuration = 0;
-        
+
         function stopAudioCapture() {
             if (audioProcessor) {
                 if (gateway && gateway.isConnected() && isStreaming) {
@@ -1070,14 +1057,14 @@
 
                 audioProcessor.disconnect();
                 audioProcessor = null;
-                
+
                 // 重置音量和说话状态
                 updateVolume(0);
                 updateUserStatus(false);
                 isSpeaking = false;
-                
+
                 console.log('✅ 音频采集已停止，音量归零');
-                
+
                 // 如果刚才有说话，触发 STT 识别
                 if (lastSpeakingDuration > 0.5) {
                     console.log(`📝 触发 STT 识别 (说话时长：${lastSpeakingDuration.toFixed(2)}s)`);
@@ -1099,15 +1086,15 @@
         // 拦截所有 Console 日志并发送到网关
         function sendBrowserLogsToGateway() {
             if (!gateway || !gateway.isConnected()) return;
-            
+
             let logCount = 0;
             const MAX_LOGS = 100; // 限制日志数量
-            
+
             // 拦截 console.log
             const originalLog = console.log;
             const originalError = console.error;
             const originalWarn = console.warn;
-            
+
             console.log = function(...args) {
                 originalLog.apply(console, args);
                 logCount++;
@@ -1120,7 +1107,7 @@
                     }
                 } catch(e) {}
             };
-            
+
             console.error = function(...args) {
                 originalError.apply(console, args);
                 logCount++;
@@ -1129,7 +1116,7 @@
                     gateway.send({ type: 'browser_log', level: 'error', message: args.join(' ') });
                 } catch(e) {}
             };
-            
+
             console.warn = function(...args) {
                 originalWarn.apply(console, args);
                 logCount++;
@@ -1139,47 +1126,47 @@
                 } catch(e) {}
             };
         }
-        
+
         // 拦截 Console 日志并发送到网关
         window._consoleLogs = [];
-        
+
         function setupConsoleInterceptor() {
             const originalLog = console.log;
             const originalError = console.error;
             const originalWarn = console.warn;
-            
+
             function sendToGateway(level, args) {
                 const message = Array.from(args).map(a => String(a)).join(' ');
                 window._consoleLogs.push({ level, message, time: Date.now() });
-                
+
                 if (gateway && gateway.isConnected()) {
                     gateway.send({ type: 'browser_log', level, message });
                 }
             }
-            
+
             console.log = function(...args) {
                 originalLog.apply(console, args);
                 sendToGateway('log', args);
             };
-            
+
             console.error = function(...args) {
                 originalError.apply(console, args);
                 sendToGateway('error', args);
             };
-            
+
             console.warn = function(...args) {
                 originalWarn.apply(console, args);
                 sendToGateway('warn', args);
             };
         }
-        
+
         // 页面加载
         window.addEventListener('DOMContentLoaded', () => {
             console.log('📱 页面已加载');
-            
+
             // 设置 Console 拦截器
             setupConsoleInterceptor();
-            
+
             updateCallStatusText('准备就绪');
             updateAgentStatus('ready');
 
@@ -1187,16 +1174,16 @@
             const btnCall = document.getElementById('btnCall');
             const btnHangup = document.getElementById('btnHangup');
             const btnMic = document.getElementById('btnMic');
-            
+
             if (btnCall) {
                 btnCall.addEventListener('click', startCall);
                 console.log('✅ 拨号按钮事件已绑定');
             }
-            
+
             if (btnHangup) {
                 btnHangup.addEventListener('click', endCall);
             }
-            
+
             if (btnMic) {
                 btnMic.addEventListener('click', toggleMic);
             }
