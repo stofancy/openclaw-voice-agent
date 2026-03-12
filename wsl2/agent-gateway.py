@@ -287,11 +287,17 @@ class AgentGateway:
             "data": audio_b64,
         }
         try:
-            # 创建新事件循环用于同步调用
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.send_to_clients_async(response_data))
-            loop.close()
+            # 尝试获取当前事件循环，如果没有则创建新的
+            try:
+                loop = asyncio.get_running_loop()
+                # 在当前循环中创建任务（非阻塞）
+                asyncio.create_task(self.send_to_clients_async(response_data))
+            except RuntimeError:
+                # 没有运行中的循环，创建新循环并运行
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.send_to_clients_async(response_data))
+                loop.close()
         except Exception as e:
             log(f"❌ 发送音频失败：{e}")
     
