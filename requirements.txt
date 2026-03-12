@@ -1,0 +1,6 @@
+# Windows Audio Capture Dependencies
+sounddevice>=0.4.6
+websockets>=12.0
+torch>=2.0.0
+numpy>=1.24.0
+aiohttp>=3.9.0

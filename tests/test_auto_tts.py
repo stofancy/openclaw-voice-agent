@@ -34,14 +34,13 @@ async def test_tts_no_overlap():
     print(f"{Colors.BLUE}{'='*80}{Colors.END}")
     
     async with async_playwright() as p:
-        # 启动浏览器（headless 模式）
+        # 启动浏览器（有头模式，方便调试）
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=[
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu',
                 '--autoplay-policy=no-user-gesture-required'
             ]
         )

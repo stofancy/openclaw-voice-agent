@@ -102,36 +102,73 @@ async def test_tts_no_overlap():
         await page.wait_for_selector('#btnCall')
         print(f"{Colors.GREEN}✅ 页面加载成功{Colors.END}")
         
-        # 点击拨号
-        print(f"\n{Colors.BLUE}[步骤 2] 点击拨号...{Colors.END}")
-        await page.click('#btnCall')
-        await asyncio.sleep(2)
+        # 直接创建 gateway 实例（绕过麦克风权限）
+        print(f"\n{Colors.BLUE}[步骤 2] 创建 gateway 实例...{Colors.END}")
         
-        # 直接调用网关内部方法触发 TTS（绕过 STT）
-        print(f"\n{Colors.BLUE}[步骤 3] 直接触发 TTS 播放...{Colors.END}")
-        await page.evaluate("""
-            (async () => {
-                if (window.gateway && window.gateway.ws && window.gateway.ws.readyState === 1) {
-                    // 直接发送 reply 消息，模拟 Agent 回复
-                    window.gateway.send({
-                        type: 'reply',
-                        text: '你好！'
+        gateway_created = await page.evaluate("""
+            () => {
+                return new Promise((resolve) => {
+                    // 直接创建 gateway 实例
+                    window.gateway = new VoiceGateway({
+                        url: 'ws://localhost:8765',
+                        autoPlayAudio: true,
+                        onConnected: () => {
+                            console.log('✅ Gateway 已连接');
+                            resolve(true);
+                        },
+                        onError: (error) => {
+                            console.log('❌ Gateway 错误:', error);
+                            resolve(false);
+                        }
                     });
                     
-                    // 等待一下，让网关处理
-                    await new Promise(r => setTimeout(r, 100));
+                    window.gateway.connect();
                     
-                    // 模拟 TTS 音频数据（小的 PCM 数据）
-                    const testAudio = new Uint8Array(1024);
-                    const base64Audio = btoa(String.fromCharCode.apply(null, testAudio));
-                    
-                    // 直接调用播放
-                    if (window.gateway._playAudioBase64) {
-                        window.gateway._playAudioBase64(base64Audio);
-                    }
-                }
-            })();
+                    // 10 秒超时
+                    setTimeout(() => resolve(false), 10000);
+                });
+            }
         """)
+        
+        if not gateway_created:
+            print(f"{Colors.RED}❌ Gateway 创建失败{Colors.END}")
+            await browser.close()
+            return 1
+        
+        print(f"{Colors.GREEN}✅ Gateway 已创建并连接{Colors.END}")
+        
+        # 直接触发 TTS 播放
+        print(f"\n{Colors.BLUE}[步骤 3] 触发 TTS 播放...{Colors.END}")
+        
+        # 模拟 TTS 音频数据并检查 Console 日志
+        result = await page.evaluate("""
+            () => {
+                const testAudio = new Uint8Array(1024);
+                const base64Audio = btoa(String.fromCharCode.apply(null, testAudio));
+                
+                const logs = [];
+                const originalLog = console.log;
+                console.log = function(...args) {
+                    originalLog.apply(console, args);
+                    logs.push(args.join(' '));
+                };
+                
+                let success = false;
+                if (window.gateway && window.gateway.playAudio) {
+                    window.gateway.playAudio(base64Audio);
+                    success = true;
+                    logs.push('playAudio 调用成功');
+                } else {
+                    logs.push('playAudio 不存在');
+                }
+                
+                // 等待一下看是否有日志
+                return { success, logs };
+            }
+        """)
+        print(f"播放结果：{result}")
+        if result.get('logs'):
+            print(f"Console 日志：{result['logs']}")
         
         # 等待 TTS 播放完成（最多 20 秒）
         print(f"\n{Colors.BLUE}[步骤 4] 等待 TTS 播放完成 (20 秒)...{Colors.END}")
