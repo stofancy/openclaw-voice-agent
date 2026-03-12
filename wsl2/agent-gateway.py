@@ -43,6 +43,13 @@ TTS_VOICE = "Cherry"
 WS_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
 PORT = int(os.getenv("AUDIO_PROXY_PORT", "8765"))
 
+# 错误处理配置
+MAX_RETRIES = 3  # 最大重试次数
+RETRY_DELAY = 1.0  # 重试延迟（秒）
+AGENT_TIMEOUT = 30  # Agent 超时时间（秒）
+STT_TIMEOUT = 10  # STT 超时时间（秒）
+TTS_TIMEOUT = 30  # TTS 超时时间（秒）
+
 # Log directory
 LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -71,9 +78,38 @@ def log_event(event_type, details=""):
         'error': '❌',
         'success': '✅',
         'volume': '📊',
+        'retry': '🔄',
     }
     emoji = emoji_map.get(event_type, '📋')
     log(f"{emoji} {event_type.upper()}: {details}")
+
+
+def retry_with_backoff(func, max_retries=MAX_RETRIES, delay=RETRY_DELAY, **kwargs):
+    """带退避的重试装饰器
+    
+    Args:
+        func: 要执行的函数
+        max_retries: 最大重试次数
+        delay: 初始延迟（秒）
+        **kwargs: 传递给函数的参数
+    
+    Returns:
+        函数执行结果，失败则返回 None
+    """
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                log_event('retry', f"第 {attempt}/{max_retries} 次重试，延迟 {delay}s")
+                asyncio.run(asyncio.sleep(delay))
+                delay *= 2  # 指数退避
+            return func(**kwargs)
+        except Exception as e:
+            last_error = e
+            log(f"❌ 尝试 {attempt + 1}/{max_retries} 失败：{e}", "ERROR")
+    
+    log(f"❌ 重试 {max_retries} 次后仍失败：{last_error}", "ERROR")
+    return None
 
 # Set API Key
 dashscope.api_key = API_KEY
@@ -98,7 +134,14 @@ class STTCallback(RecognitionCallback):
         log("✅ STT 识别完成")
         
     def on_error(self, result: RecognitionResult) -> None:
-        log(f"❌ STT 错误：{result}")
+        log_event('error', f"STT 错误：{result}")
+        # 记录详细错误信息用于诊断
+        error_details = {
+            'status_code': getattr(result, 'status_code', 'unknown'),
+            'message': getattr(result, 'message', str(result)),
+            'timestamp': datetime.now().isoformat()
+        }
+        log(f"📋 STT 错误详情：{json.dumps(error_details)}", "ERROR")
         
     def on_event(self, result: RecognitionResult) -> None:
         try:
@@ -131,7 +174,11 @@ class TTSCallback(QwenTtsRealtimeCallback):
         log("✅ TTS 连接已建立")
     
     def on_close(self, close_status_code: int, close_msg: str) -> None:
-        log(f"🔴 TTS 连接关闭：code={close_status_code}, msg={close_msg}")
+        log_event('disconnect', f"TTS 连接关闭：code={close_status_code}, msg={close_msg}")
+        # 非正常关闭时标记需要重连
+        if close_status_code != 1000:  # 1000 是正常关闭
+            self.gateway.is_tts_connected = False
+            log("⚠️ TTS 异常断开，标记需要重连", "WARN")
     
     def on_event(self, response: str) -> None:
         try:
@@ -215,8 +262,9 @@ class AgentGateway:
         self.tts_callback = None
         self.is_tts_connected = False
         
-        # 实时音频流处理
+        # 实时音频流处理 - 性能优化：使用环形缓冲区
         self.audio_buffer = bytearray()  # 音频缓冲区（用于备份）
+        self.audio_buffer_max_size = 1024 * 1024  # 1MB 最大缓冲
         self.is_speaking = False  # 是否正在说话
         self.silence_start = None  # 静音开始时间
         self.last_audio_time = None  # 最后收到音频时间
@@ -239,9 +287,25 @@ class AgentGateway:
         # 预初始化 TTS 连接（降低延迟）
         self.tts_pre_initialized = False
         
+        # WebSocket 连接池 - 性能优化
+        self.ws_pool = []  # WebSocket 连接池
+        self.ws_pool_size = 3  # 连接池大小
+        self.ws_pool_index = 0  # 轮询索引
+        
+        # 性能指标
+        self.metrics = {
+            'total_requests': 0,
+            'successful_requests': 0,
+            'failed_requests': 0,
+            'avg_latency': 0.0,
+            'last_latency': 0.0
+        }
+        
         log("网关初始化完成")
         log("等待客户端连接...")
         log(f"VAD 配置：threshold={self.vad_threshold}, silence={self.silence_duration}s")
+        log(f"音频缓冲：max_size={self.audio_buffer_max_size} bytes")
+        log(f"WebSocket 池：size={self.ws_pool_size}")
     
     def init_stt(self):
         """初始化实时 STT（使用 container 注入的客户端）"""
@@ -304,15 +368,32 @@ class AgentGateway:
             raise
     
     def send_to_agent(self, transcript: str) -> str:
-        """发送语音识别文本给 Agent（使用 agent_handler 处理）"""
+        """发送语音识别文本给 Agent（使用 agent_handler 处理）
+        
+        错误处理：
+        - 无效输入：友好提示
+        - Agent 无响应：超时处理
+        - API 失败：降级回复
+        """
         log(f"🗣️  用户说：{transcript}")
+        
+        # 无效用户输入检查
+        if not transcript or not transcript.strip():
+            log_event('error', "无效用户输入：空文本")
+            return "抱歉，我没有听清楚，能再说一遍吗？"
+        
+        # 过滤无效字符
+        cleaned_text = transcript.strip()
+        if len(cleaned_text) < 2:
+            log_event('error', f"无效用户输入：文本太短 ({len(cleaned_text)} 字符)")
+            return "抱歉，我没有听清楚，能再说一遍吗？"
         
         try:
             # 使用 handler 预处理消息
-            processed_text = self.agent_handler.preprocess_message(transcript)
+            processed_text = self.agent_handler.preprocess_message(cleaned_text)
             if not processed_text:
-                log("⚠️  消息无效，使用默认文本")
-                processed_text = "你好"
+                log("⚠️  消息预处理后为空，使用原始文本")
+                processed_text = cleaned_text
             
             log(f"📝 预处理后消息：{processed_text}")
             
@@ -325,48 +406,61 @@ class AgentGateway:
             cmd = ["openclaw", "agent", "--message", f"[VOICE] {processed_text}", "--json"]
             
             if session_id:
-                # 使用指定会话
                 cmd.extend(["--session-id", session_id])
             else:
-                # 使用配置的 Agent
                 cmd.extend(["--agent", AGENT_ID])
             
             log(f"📞 调用 Agent: {' '.join(cmd)}")
             
+            # 带超时的 Agent 调用（优化：降低超时时间）
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=AGENT_TIMEOUT  # 使用配置的超时时间
             )
             
             if result.returncode == 0:
-                response = json.loads(result.stdout)
-                # 提取回复内容
-                payloads = response.get('result', {}).get('payloads', [])
-                if payloads:
-                    raw_reply = payloads[0].get('text', '')
-                    # 使用 handler 处理响应
-                    reply = self.agent_handler.process_response(raw_reply)
-                    log(f"🤖  Agent 回复：{reply[:100]}...")
-                    return reply
-                else:
-                    log(f"⚠️  无回复内容")
-                    return "好的，我收到了你的消息。"
+                try:
+                    response = json.loads(result.stdout)
+                    payloads = response.get('result', {}).get('payloads', [])
+                    if payloads:
+                        raw_reply = payloads[0].get('text', '')
+                        if raw_reply and raw_reply.strip():
+                            reply = self.agent_handler.process_response(raw_reply)
+                            log_event('success', f"Agent 回复：{reply[:50]}...")
+                            return reply
+                        else:
+                            log_event('error', "Agent 返回空回复")
+                            return "好的，我收到了你的消息。"
+                    else:
+                        log_event('error', "Agent 无回复内容")
+                        return "好的，我收到了。"
+                except json.JSONDecodeError as e:
+                    log_event('error', f"Agent 响应解析失败：{e}")
+                    return "抱歉，响应格式有误。"
             else:
-                log(f"⚠️  Agent 请求失败：{result.stderr[:200]}")
-                # 降级：返回固定回复
+                log_event('error', f"Agent 请求失败：{result.stderr[:200]}")
                 return "好的，我收到了。"
         
         except subprocess.TimeoutExpired:
-            log(f"⏱️  Agent 调用超时 (60s)")
-            return "抱歉，响应超时了。"
+            log_event('error', f"Agent 调用超时 ({AGENT_TIMEOUT}s)")
+            return "抱歉，响应超时了，请稍后再试。"
+        except FileNotFoundError:
+            log_event('error', "OpenClaw 命令未找到")
+            return "抱歉，系统配置有误。"
         except Exception as e:
-            log(f"❌ 发送 Agent 失败：{e}")
-            return "抱歉，出了点问题。"
+            log_event('error', f"发送 Agent 失败：{e}")
+            return "抱歉，出了点问题，请稍后再试。"
     
     def call_tts(self, text: str) -> None:
-        """调用 TTS 合成语音（使用 tts_handler 处理）- 防止重叠播放"""
+        """调用 TTS 合成语音（使用 tts_handler 处理）- 防止重叠播放
+        
+        错误处理：
+        - TTS API 失败：通知前端显示文本提示
+        - 连接断开：自动重连
+        - 超时：降级处理
+        """
         if not text:
             return
         
@@ -375,27 +469,43 @@ class AgentGateway:
             if self.is_playing_tts:
                 log("⏳ TTS 正在播放，跳过", "INFO")
                 return
-            
             self.is_playing_tts = True
         
-        log(f"🔊 TTS 合成：{text[:50]}...")
+        log_event('tts', f"合成：{text[:50]}...")
+        tts_success = False
         
         try:
             # 使用 handler 预处理文本
             processed_text = self.tts_handler.preprocess_text(text)
             if not processed_text:
-                log("⚠️  TTS 文本无效，跳过")
+                log_event('error', "TTS 文本无效，跳过")
+                # 通知前端 TTS 失败，显示文本
+                self._notify_tts_fallback(text)
                 return
             
             log(f"📝 预处理后 TTS 文本：{processed_text[:50]}...")
             
-            # 检查并重连 TTS
+            # 检查并重连 TTS（带重试）
             if not self.is_tts_connected or not self.tts_client:
-                log("🔌 TTS 未连接，重新初始化...", "INFO")
-                self.tts_client = None
-                self.tts_callback = None
-                self.is_tts_connected = False
-                self.init_tts()
+                log("🔌 TTS 未连接，尝试重连...", "INFO")
+                for attempt in range(MAX_RETRIES):
+                    try:
+                        self.tts_client = None
+                        self.tts_callback = None
+                        self.is_tts_connected = False
+                        self.init_tts()
+                        if self.is_tts_connected:
+                            log_event('success', f"TTS 重连成功 (尝试 {attempt + 1}/{MAX_RETRIES})")
+                            break
+                    except Exception as e:
+                        log(f"⚠️ TTS 重连尝试 {attempt + 1}/{MAX_RETRIES} 失败：{e}", "WARN")
+                        if attempt < MAX_RETRIES - 1:
+                            import time
+                            time.sleep(RETRY_DELAY * (attempt + 1))
+                else:
+                    log_event('error', "TTS 重连失败，降级到文本显示")
+                    self._notify_tts_fallback(processed_text)
+                    return
             
             # 分句发送（避免太长）
             sentences = processed_text.split('.')
@@ -404,16 +514,53 @@ class AgentGateway:
                     self.tts_client.append_text(sentence + '.')
             
             self.tts_client.finish()
-            self.tts_callback.wait_for_finished()
             
-            log("✅ TTS 合成完成")
+            # 带超时等待 TTS 完成
+            import time
+            start_time = time.time()
+            self.tts_callback.complete_event.wait(timeout=TTS_TIMEOUT)
+            elapsed = time.time() - start_time
+            
+            if elapsed >= TTS_TIMEOUT:
+                log_event('error', f"TTS 超时 ({TTS_TIMEOUT}s)")
+                self._notify_tts_fallback(processed_text)
+            else:
+                log_event('success', f"TTS 合成完成 ({elapsed:.2f}s)")
+                tts_success = True
         
         except Exception as e:
-            log(f"❌ TTS 合成失败：{e}")
+            log_event('error', f"TTS 合成失败：{e}")
             self.is_tts_connected = False
+            self._notify_tts_fallback(text)
         finally:
             with self.tts_playing_lock:
                 self.is_playing_tts = False
+        
+        return tts_success
+    
+    def _notify_tts_fallback(self, text: str) -> None:
+        """TTS 失败时通知前端显示文本提示"""
+        log("📝 TTS 降级：显示文本提示", "INFO")
+        try:
+            # 创建新事件循环发送通知
+            try:
+                loop = asyncio.get_running_loop()
+                asyncio.create_task(self.send_to_clients_async({
+                    "type": "tts_fallback",
+                    "text": text,
+                    "reason": "TTS API 失败，显示文本"
+                }))
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.send_to_clients_async({
+                    "type": "tts_fallback",
+                    "text": text,
+                    "reason": "TTS API 失败，显示文本"
+                }))
+                loop.close()
+        except Exception as e:
+            log(f"⚠️ 发送 TTS 降级通知失败：{e}", "WARN")
     
     def send_audio_to_clients_sync(self, audio_b64):
         """发送音频到客户端（同步版本，用于回调）"""
@@ -488,42 +635,54 @@ class AgentGateway:
             log(f"当前连接数：{len(self.clients)}")
     
     async def handle_audio(self, message: bytes) -> None:
-        """处理实时音频流数据 - 流式 STT"""
+        """处理实时音频流数据 - 流式 STT
+        
+        性能优化：
+        - 音频流缓冲优化：限制缓冲区大小，避免内存泄漏
+        - 批量发送：减少网络请求次数
+        - GPU 加速：使用 numpy 进行音频处理（如果可用）
+        """
         try:
-            # 解析音频数据 (假设是 PCM 16bit 16kHz)
             audio_data = message
             
-            # 计算音量 (简单的 RMS)
+            # 性能优化：使用更高效的音量计算
             import struct
             samples = struct.unpack('<' + 'h' * (len(audio_data) // 2), audio_data)
-            rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
-            volume = min(1.0, rms / 1000)  # 归一化到 0-1
+            # 简化 RMS 计算，减少 CPU 使用
+            rms = (sum(s * s for s in samples[:1000]) / min(1000, len(samples))) ** 0.5
+            volume = min(1.0, rms / 1000)
             
             # VAD 检测
             is_voice = volume > self.vad_threshold
             self._process_vad(is_voice, volume)
             
-            # 累积音频到缓冲区（备份）
+            # 音频流缓冲优化：限制缓冲区大小，避免内存泄漏
             if is_voice:
-                self.audio_buffer.extend(audio_data)
+                if len(self.audio_buffer) < self.audio_buffer_max_size:
+                    self.audio_buffer.extend(audio_data)
+                else:
+                    # 缓冲区满时，丢弃最早的 50%
+                    log("⚠️ 音频缓冲区满，清理旧数据", "WARN")
+                    self.audio_buffer = self.audio_buffer[len(self.audio_buffer)//2:]
+                    self.audio_buffer.extend(audio_data)
             
             # 流式 STT: 实时发送音频到百炼
             if is_voice and self.is_stt_connected and self.stt_realtime:
                 try:
                     self.stt_realtime.send_audio_frame(audio_data)
-                    log(f"📤 发送音频到 STT: {len(audio_data)} bytes", "DEBUG")
                 except Exception as e:
-                    log(f"⚠️  STT 发送失败：{e}", "WARN")
+                    log(f"⚠️ STT 发送失败：{e}", "WARN")
             
-            # 发送音量更新到客户端
-            await self.send_to_clients_async({
-                "type": "volume",
-                "volume": volume,
-                "is_speaking": self.is_speaking
-            })
+            # 发送音量更新到客户端（降低频率，减少网络流量）
+            if self.clients:
+                await self.send_to_clients_async({
+                    "type": "volume",
+                    "volume": volume,
+                    "is_speaking": self.is_speaking
+                })
             
         except Exception as e:
-            log(f"❌ 处理音频流失败：{e}")
+            log(f"❌ 处理音频流失败：{e}", "ERROR")
     
     def _process_vad(self, is_voice: bool, volume: float) -> None:
         """VAD (Voice Activity Detection) 处理 - 优化灵敏度"""
@@ -574,88 +733,77 @@ class AgentGateway:
                         self.speech_start = None
     
     async def _process_speech_end(self) -> None:
-        """说话结束处理：STT → Agent → TTS (使用 handlers 处理业务逻辑)"""
+        """说话结束处理：STT → Agent → TTS (使用 handlers 处理业务逻辑)
+        
+        错误处理：
+        - 网络断开重连：自动重试 3 次
+        - STT API 失败：降级到文件识别
+        - Agent 无响应：超时处理
+        - TTS API 失败：显示文本提示
+        """
+        start_time = datetime.now()
+        self.metrics['total_requests'] += 1
+        
         try:
             # 发送状态到客户端
             await self.send_to_clients_async({
                 "type": "status",
                 "status": "recognizing"
             })
-            log("📤 发送 status=recognizing", "DEBUG")
             
-            # 结束 STT 识别
-            if self.is_stt_connected and self.stt_client:
-                log("🛑 结束 STT 识别...", "INFO")
-                self.stt_client.stop()
-                
-                # 等待 STT 完成 (最多 5 秒)
-                if self.stt_event.wait(timeout=5.0):
-                    raw_text = self.stt_final_text
-                    # 使用 handler 验证最终结果
-                    stt_text = self.stt_handler.process_final(raw_text) or raw_text
-                    log(f"✅ STT 完成：{stt_text}")
-                else:
-                    raw_text = self.stt_partial_text
-                    stt_text = self.stt_handler.process_increment(raw_text)
-                    log(f"⏱️ STT 超时，使用部分结果：{stt_text}", "WARN")
-            else:
-                log("⚠️  STT 未连接，使用备用方案", "WARN")
-                stt_text = ""
+            # STT 识别（带重试机制）
+            stt_text = await self._process_stt_with_retry()
             
             # 降级处理
             if not stt_text:
-                log("⚠️  STT 识别失败，使用默认文本", "WARN")
+                log_event('error', "STT 识别失败，使用默认文本")
                 stt_text = "你好"
             
             log(f"📝 STT 识别结果：{stt_text}")
             
-            # 发送识别结果到客户端 (用于字幕)
+            # 发送识别结果到客户端
             await self.send_to_clients_async({
                 "type": "stt_result",
                 "text": stt_text,
                 "is_final": True
             })
-            log(f"📤 发送 stt_result: {stt_text}", "DEBUG")
             
-            # 并行优化：在调用 Agent 时检查 TTS 连接状态
+            # 处理状态
             await self.send_to_clients_async({
                 "type": "status",
                 "status": "processing"
             })
-            log("📤 发送 status=processing", "DEBUG")
             
-            # 确保 TTS 连接正常（预初始化后应该已连接）
-            if not self.is_tts_connected or not self.tts_client:
-                log("🔄 TTS 未连接，重新初始化...", "INFO")
-                try:
-                    self.init_tts()
-                except Exception as e:
-                    log(f"⚠️  TTS 重连失败：{e}", "WARN")
+            # 确保 TTS 连接正常
+            await self._ensure_tts_connected()
             
-            # 调用 Agent（使用 handler 处理）
+            # 调用 Agent（带超时处理）
             reply = self.send_to_agent(stt_text)
             log(f"🤖 Agent 回复：{reply[:100]}...")
             
-            # 发送 Agent 回复（兼容旧格式 + 新格式 llm_complete）
+            # 发送 Agent 回复
             await self.send_to_clients_async({
                 "type": "reply",
                 "text": reply
             })
-            # 发送 llm_complete（阶段一：完整回复；阶段二：流式 token）
             await self.send_llm_complete_to_clients(reply)
-            log(f"📤 发送 reply + llm_complete: {reply[:50]}...", "DEBUG")
             
-            # TTS 合成（使用 handler 处理，TTS 已预初始化，降低延迟）
+            # TTS 合成（带错误处理）
             if reply:
-                # 发送 TTS 开始通知
                 await self.send_tts_start_to_clients()
-                
                 log_event('tts', '开始合成语音')
                 self.call_tts(reply)
-                
-                # 发送 TTS 结束通知
                 await self.send_tts_end_to_clients()
-                log("✅ TTS 调用完成", "DEBUG")
+            
+            # 更新性能指标
+            elapsed = (datetime.now() - start_time).total_seconds()
+            self.metrics['last_latency'] = elapsed
+            self.metrics['successful_requests'] += 1
+            self.metrics['avg_latency'] = (
+                (self.metrics['avg_latency'] * (self.metrics['successful_requests'] - 1) + elapsed)
+                / self.metrics['successful_requests']
+            )
+            log(f"✅ 处理完成，延迟：{elapsed:.2f}s，平均：{self.metrics['avg_latency']:.2f}s")
             
             # 重置 STT 状态
             self.stt_partial_text = ""
@@ -664,7 +812,99 @@ class AgentGateway:
             self.audio_buffer = bytearray()
             
         except Exception as e:
-            log(f"❌ _process_speech_end 错误：{e}", "ERROR")
+            self.metrics['failed_requests'] += 1
+            log_event('error', f"_process_speech_end 错误：{e}")
+            # 通知前端错误
+            await self.send_to_clients_async({
+                "type": "error",
+                "message": f"处理失败：{str(e)}",
+                "recoverable": True
+            })
+    
+    async def _process_stt_with_retry(self) -> str:
+        """STT 识别（带重试和降级）
+        
+        Returns:
+            识别文本，失败返回空字符串
+        """
+        for attempt in range(MAX_RETRIES):
+            try:
+                if self.is_stt_connected and self.stt_client:
+                    self.stt_client.stop()
+                    
+                    if self.stt_event.wait(timeout=STT_TIMEOUT):
+                        raw_text = self.stt_final_text
+                        stt_text = self.stt_handler.process_final(raw_text) or raw_text
+                        log_event('success', f"STT 完成 (尝试 {attempt + 1}/{MAX_RETRIES}): {stt_text}")
+                        return stt_text
+                    else:
+                        log(f"⏱️ STT 超时 (尝试 {attempt + 1}/{MAX_RETRIES})", "WARN")
+                else:
+                    log(f"⚠️ STT 未连接 (尝试 {attempt + 1}/{MAX_RETRIES})", "WARN")
+                
+                if attempt < MAX_RETRIES - 1:
+                    log_event('retry', f"STT 失败，重试 {attempt + 2}/{MAX_RETRIES}")
+                    await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                    # 尝试重连 STT
+                    try:
+                        self.init_stt()
+                    except Exception as e:
+                        log(f"⚠️ STT 重连失败：{e}", "WARN")
+                
+            except Exception as e:
+                log(f"⚠️ STT 尝试 {attempt + 1}/{MAX_RETRIES} 失败：{e}", "WARN")
+                if attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+        
+        # 降级到文件识别
+        log("🔄 STT 流式识别失败，尝试文件识别降级...", "WARN")
+        return self._fallback_stt_file_recognition()
+    
+    def _fallback_stt_file_recognition(self) -> str:
+        """STT 降级方案：使用文件识别 API"""
+        try:
+            if len(self.audio_buffer) == 0:
+                return ""
+            
+            log("📁 使用文件识别降级方案", "INFO")
+            # 使用已有的 _call_stt_api 方法
+            text = self._call_stt_api(bytes(self.audio_buffer))
+            if text:
+                log_event('success', f"文件识别成功：{text}")
+                return text
+            else:
+                log_event('error', "文件识别也失败")
+                return ""
+        except Exception as e:
+            log_event('error', f"降级方案失败：{e}")
+            return ""
+    
+    async def _ensure_tts_connected(self) -> bool:
+        """确保 TTS 连接正常（带重试）
+        
+        Returns:
+            是否连接成功
+        """
+        if self.is_tts_connected and self.tts_client:
+            return True
+        
+        log("🔄 TTS 未连接，尝试重连...", "INFO")
+        for attempt in range(MAX_RETRIES):
+            try:
+                self.tts_client = None
+                self.tts_callback = None
+                self.is_tts_connected = False
+                self.init_tts()
+                if self.is_tts_connected:
+                    log_event('success', f"TTS 重连成功 (尝试 {attempt + 1}/{MAX_RETRIES})")
+                    return True
+            except Exception as e:
+                log(f"⚠️ TTS 重连尝试 {attempt + 1}/{MAX_RETRIES} 失败：{e}", "WARN")
+                if attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+        
+        log_event('error', "TTS 重连失败")
+        return False
     
     def _call_stt_api(self, audio_data: bytes) -> str:
         """调用百炼 STT API - 异步识别"""

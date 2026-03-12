@@ -736,6 +736,86 @@
   }
 }
 
+/* ===== GPU 加速优化 ===== */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* 动画性能优化 */
+.voice-ring.gpu-accelerated {
+  transform: translate3d(-50%, -50%, 0);
+}
+
+.voice-circle.gpu-accelerated {
+  transform: translate3d(0, 0, 0);
+}
+
+.subtitle-item.gpu-accelerated {
+  transform: translate3d(0, 0, 0);
+}
+
+.error-banner.gpu-accelerated {
+  transform: translate3d(0, 0, 0);
+}
+
+/* ===== 错误提示横幅 ===== */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin: var(--spacing-md) 0;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  animation: slide-in 0.3s ease-out;
+  max-width: 500px;
+  width: 100%;
+}
+
+.error-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.error-message {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.error-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--color-danger);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.error-dismiss:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* ===== 重试徽章 ===== */
+.retry-badge {
+  display: inline-block;
+  margin-left: var(--spacing-sm);
+  padding: 2px 8px;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-warning);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
 /* ===== 辅助功能 ===== */
 @media (prefers-reduced-motion: reduce) {
   *,
