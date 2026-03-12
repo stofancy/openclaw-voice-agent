@@ -139,9 +139,9 @@ class AgentGateway:
         self.last_audio_time = None  # 最后收到音频时间
         
         # VAD 配置
-        self.vad_threshold = 0.3  # VAD 阈值 (0-1)
-        self.silence_duration = 1.0  # 静音判定时间 (秒)
-        self.min_speech_duration = 0.5  # 最小语音时长 (秒)
+        self.vad_threshold = 0.1  # VAD 阈值 (0-1) - 降低灵敏度
+        self.silence_duration = 0.8  # 静音判定时间 (秒) - 缩短
+        self.min_speech_duration = 0.3  # 最小语音时长 (秒) - 缩短
         self.speech_start = None  # 说话开始时间
         
         log("网关初始化完成")
@@ -347,7 +347,7 @@ class AgentGateway:
                 self.is_speaking = True
                 self.speech_start = now
                 self.silence_start = None
-                log(f"🎤 检测到说话开始 (volume={volume:.2f})")
+                log_event('speaking', f'开始 (volume={volume:.2f})')
                 
                 # 通知客户端
                 asyncio.create_task(self.send_to_clients_async({
@@ -371,7 +371,7 @@ class AgentGateway:
                         
                         if speech_duration >= self.min_speech_duration:
                             # 说话结束，处理音频
-                            log(f"🎤 检测到说话结束 (持续 {speech_duration:.2f}s)")
+                            log_event('speaking', f'结束 (持续 {speech_duration:.2f}s)')
                             asyncio.create_task(self._process_speech_end())
                         else:
                             log(f"⚠️  语音太短 ({speech_duration:.2f}s)，忽略")
