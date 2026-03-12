@@ -807,15 +807,27 @@
                 // 音量监测
                 startVolumeMonitor();
 
+                // 清理旧的 gateway（如果有）
+                if (window.gateway) {
+                    console.log('🧹 清理旧的 gateway...');
+                    if (window.gateway.stopAudio) {
+                        window.gateway.stopAudio();
+                    }
+                    if (window.gateway.disconnect) {
+                        window.gateway.disconnect();
+                    }
+                    window.gateway = null;
+                }
+
                 // 连接网关
-                gateway = new VoiceGateway({
+                window.gateway = new VoiceGateway({
                     url: WS_URL,
                     autoPlayAudio: true,
                     onConnected: () => {
                         console.log('✅ VoiceGateway 已连接');
                         // 发送浏览器日志到网关
                         sendBrowserLogsToGateway();
-
+                        
                         updateCallStatusText('通话中');
                         updateAgentStatus('ready');
                         document.getElementById('btnHangup').disabled = false;
@@ -844,7 +856,7 @@
                     },
                     onAudio: (audio) => {
                         console.log('🔊 收到 TTS 音频数据:', audio ? audio.length : 0, 'bytes');
-                        
+
                         // 直接交给 SDK 处理（SDK 内部有 isPlaying 检查）
                         if (gateway && gateway.playAudio) {
                             gateway.playAudio(audio);
@@ -896,9 +908,9 @@
             }
             window._isPlayingTTS = false;
 
-            if (gateway) {
-                gateway.disconnect();
-                gateway = null;
+            if (window.gateway) {
+                window.gateway.disconnect();
+                window.gateway = null;
             }
 
             if (mediaStream) {
