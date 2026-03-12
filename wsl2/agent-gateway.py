@@ -14,6 +14,7 @@ import threading
 import queue
 import tempfile
 import struct
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import websockets
 import requests
 from dashscope.audio.qwen_tts_realtime import QwenTtsRealtime, QwenTtsRealtimeCallback, AudioFormat
 from dashscope.audio.asr import Recognition
+from dashscope.audio.asr_realtime import ASRRealtime, ASRRealtimeCallback
 import dashscope
 from dotenv import load_dotenv
 
@@ -69,6 +71,57 @@ def log_event(event_type, details=""):
 
 # Set API Key
 dashscope.api_key = API_KEY
+
+
+class STTCallback(ASRRealtimeCallback):
+    """实时 STT 回调"""
+    
+    def __init__(self, gateway):
+        self.gateway = gateway
+        self.result_text = ""
+        self.final_text = ""
+        self.partial_callback = None  # 用于回调增量结果
+        
+    def on_open(self) -> None:
+        log("✅ STT 连接已建立")
+        
+    def on_close(self, close_status_code: int, close_msg: str) -> None:
+        log(f"🔴 STT 连接关闭：code={close_status_code}, msg={close_msg}")
+        
+    def on_event(self, response: str) -> None:
+        try:
+            data = json.loads(response) if isinstance(response, str) else response
+            event_type = data.get('type', 'unknown')
+            
+            if event_type == 'session.created':
+                session_id = data.get('session', {}).get('id', 'unknown')
+                log(f"📋 STT 会话创建：{session_id}")
+                
+            elif event_type == 'recognizer.result.increment':
+                # 增量识别结果（流式）
+                text = data.get('result', {}).get('text', '')
+                if text:
+                    self.result_text = text
+                    log(f"📝 识别中：{text}", "DEBUG")
+                    # 通知网关有增量结果
+                    if self.partial_callback:
+                        self.partial_callback(text, is_final=False)
+                    
+            elif event_type == 'recognizer.result.completed':
+                # 完成识别结果
+                text = data.get('result', {}).get('text', '')
+                if text:
+                    self.final_text = text
+                    log(f"✅ 识别完成：{text}")
+                    # 通知网关有最终结果
+                    if self.partial_callback:
+                        self.partial_callback(text, is_final=True)
+                    
+            elif event_type == 'session.finished':
+                log(f"🔴 STT 会话结束")
+                
+        except Exception as e:
+            log(f'❌ STT 回调错误：{e}', "ERROR")
 
 
 class TTSCallback(QwenTtsRealtimeCallback):
@@ -136,12 +189,20 @@ class AgentGateway:
         log("="*60)
         
         self.clients = set()
+        
+        # STT 相关
+        self.stt_realtime = None
+        self.stt_callback = None
+        self.is_stt_connected = False
+        self.current_stt_text = ""  # 当前 STT 识别结果
+        
+        # TTS 相关
         self.tts_realtime = None
         self.tts_callback = None
         self.is_tts_connected = False
         
         # 实时音频流处理
-        self.audio_buffer = bytearray()  # 音频缓冲区
+        self.audio_buffer = bytearray()  # 音频缓冲区（用于备份）
         self.is_speaking = False  # 是否正在说话
         self.silence_start = None  # 静音开始时间
         self.last_audio_time = None  # 最后收到音频时间
@@ -156,9 +217,49 @@ class AgentGateway:
         self.is_playing_tts = False  # 是否正在播放 TTS
         self.tts_playing_lock = threading.Lock()  # TTS 播放锁
         
+        # 流式 STT 状态
+        self.stt_partial_text = ""  # 增量识别结果
+        self.stt_final_text = ""  # 最终识别结果
+        self.stt_event = threading.Event()  # STT 完成事件
+        
         log("网关初始化完成")
         log("等待客户端连接...")
         log(f"VAD 配置：threshold={self.vad_threshold}, silence={self.silence_duration}s")
+    
+    def init_stt(self):
+        """初始化实时 STT"""
+        if self.stt_realtime and self.is_stt_connected:
+            return
+        
+        log("初始化实时 STT...")
+        dashscope.api_key = API_KEY
+        self.stt_callback = STTCallback(self)
+        
+        # 设置回调函数处理增量结果
+        def on_stt_partial(text, is_final):
+            self.stt_partial_text = text
+            if is_final:
+                self.stt_final_text = text
+                self.stt_event.set()  # 通知 STT 完成
+                log(f"✅ STT 最终结果：{text}")
+            else:
+                log(f"📝 STT 增量：{text}", "DEBUG")
+        
+        self.stt_callback.partial_callback = on_stt_partial
+        
+        self.stt_realtime = ASRRealtime(
+            model='paraformer-realtime-v2',
+            callback=self.stt_callback,
+        )
+        
+        try:
+            self.stt_realtime.connect()
+            self.is_stt_connected = True
+            log("✅ STT 初始化完成")
+        except Exception as e:
+            log(f"❌ STT 初始化失败：{e}", "ERROR")
+            self.is_stt_connected = False
+            raise
     
     def init_tts(self):
         """初始化 TTS"""
@@ -317,6 +418,13 @@ class AgentGateway:
         log(f"🌐 浏览器客户端已连接 (IP: {client_ip})")
         self.clients.add(websocket)
         
+        # 初始化 STT（如果需要）
+        if not self.is_stt_connected:
+            try:
+                self.init_stt()
+            except Exception as e:
+                log(f"⚠️  STT 初始化失败：{e}", "WARN")
+        
         try:
             async for message in websocket:
                 try:
@@ -338,7 +446,7 @@ class AgentGateway:
             log(f"当前连接数：{len(self.clients)}")
     
     async def handle_audio(self, message: bytes) -> None:
-        """处理实时音频流数据"""
+        """处理实时音频流数据 - 流式 STT"""
         try:
             # 解析音频数据 (假设是 PCM 16bit 16kHz)
             audio_data = message
@@ -353,9 +461,17 @@ class AgentGateway:
             is_voice = volume > self.vad_threshold
             self._process_vad(is_voice, volume)
             
-            # 累积音频到缓冲区
+            # 累积音频到缓冲区（备份）
             if is_voice:
                 self.audio_buffer.extend(audio_data)
+            
+            # 流式 STT: 实时发送音频到百炼
+            if is_voice and self.is_stt_connected and self.stt_realtime:
+                try:
+                    self.stt_realtime.send_audio(audio_data)
+                    log(f"📤 发送音频到 STT: {len(audio_data)} bytes", "DEBUG")
+                except Exception as e:
+                    log(f"⚠️  STT 发送失败：{e}", "WARN")
             
             # 发送音量更新到客户端
             await self.send_to_clients_async({
@@ -374,10 +490,13 @@ class AgentGateway:
         if is_voice:
             # 检测到声音 (提高阈值避免误触发)
             if not self.is_speaking:
-                # 开始说话
+                # 开始说话 - 重置 STT 状态
                 self.is_speaking = True
                 self.speech_start = now
                 self.silence_start = None
+                self.stt_partial_text = ""
+                self.stt_final_text = ""
+                self.stt_event.clear()
                 log_event('speaking', f'开始 (volume={volume:.2f})')
                 
                 # 通知客户端
@@ -413,13 +532,7 @@ class AgentGateway:
                         self.speech_start = None
     
     async def _process_speech_end(self) -> None:
-        """说话结束处理：STT → Agent → TTS"""
-        if len(self.audio_buffer) == 0:
-            log("⚠️  音频缓冲区为空，跳过处理", "WARN")
-            return
-        
-        log(f"📦 处理语音数据：{len(self.audio_buffer)} bytes")
-        
+        """说话结束处理：STT → Agent → TTS (流式 STT)"""
         try:
             # 发送状态到客户端
             await self.send_to_clients_async({
@@ -428,9 +541,23 @@ class AgentGateway:
             })
             log("📤 发送 status=recognizing", "DEBUG")
             
-            # 调用百炼 STT API
-            stt_text = self._call_stt_api(self.audio_buffer)
+            # 结束 STT 识别
+            if self.is_stt_connected and self.stt_realtime:
+                log("🛑 结束 STT 识别...", "INFO")
+                self.stt_realtime.finish()
+                
+                # 等待 STT 完成 (最多 5 秒)
+                if self.stt_event.wait(timeout=5.0):
+                    stt_text = self.stt_final_text
+                    log(f"✅ STT 完成：{stt_text}")
+                else:
+                    stt_text = self.stt_partial_text
+                    log(f"⏱️ STT 超时，使用部分结果：{stt_text}", "WARN")
+            else:
+                log("⚠️  STT 未连接，使用备用方案", "WARN")
+                stt_text = ""
             
+            # 降级处理
             if not stt_text:
                 log("⚠️  STT 识别失败，使用默认文本", "WARN")
                 stt_text = "你好"
@@ -467,6 +594,13 @@ class AgentGateway:
                 log_event('tts', '开始合成语音')
                 self.call_tts(reply)
                 log("✅ TTS 调用完成", "DEBUG")
+            
+            # 重置 STT 状态
+            self.stt_partial_text = ""
+            self.stt_final_text = ""
+            self.stt_event.clear()
+            self.audio_buffer = bytearray()
+            
         except Exception as e:
             log(f"❌ _process_speech_end 错误：{e}", "ERROR")
     
