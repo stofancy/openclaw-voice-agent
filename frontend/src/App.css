@@ -41,6 +41,31 @@
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
+/* ===== 状态切换过渡动画 ===== */
+.status-transition {
+  transition: all var(--transition-normal) ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.05); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 /* ===== 基础重置 ===== */
 * {
   margin: 0;
@@ -73,9 +98,34 @@
   border-radius: var(--radius-full);
   font-size: 0.95rem;
   font-weight: 600;
-  transition: all var(--transition-normal);
+  transition: all var(--transition-normal) ease-in-out;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
+}
+
+/* 状态切换过渡效果 */
+.status-indicator.status-transition {
+  transition: all 0.3s ease-in-out;
+}
+
+.status-indicator.idle-to-connecting {
+  animation: fadeIn 0.3s ease-in, pulse 1.5s ease-in-out infinite 0.3s;
+}
+
+.status-indicator.connecting-to-listening {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.status-indicator.listening-to-processing {
+  animation: spin 0.5s ease-in-out;
+}
+
+.status-indicator.processing-to-speaking {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.status-indicator.speaking-to-idle {
+  animation: fadeOut 0.3s ease-out;
 }
 
 .status-indicator.idle {
@@ -134,6 +184,7 @@
   align-items: center;
   justify-content: center;
   margin-bottom: var(--spacing-lg);
+  transition: all var(--transition-normal) ease-in-out;
 }
 
 .voice-circle {
@@ -147,6 +198,7 @@
   justify-content: center;
   box-shadow: var(--shadow-lg);
   z-index: 10;
+  transition: all var(--transition-normal) ease-in-out;
 }
 
 .voice-icon {
@@ -155,32 +207,102 @@
   transition: all var(--transition-normal);
 }
 
+/* 波纹动画环 - 3 层同心圆 */
 .voice-ring {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  border: 3px solid transparent;
+  border: 2px solid var(--color-primary);
   opacity: 0;
 }
 
 .ring-1 {
   width: 100%;
   height: 100%;
-  border-color: rgba(16, 163, 127, 0.3);
+  border-color: rgba(16, 163, 127, 0.8);
 }
 
 .ring-2 {
   width: 140%;
   height: 140%;
-  border-color: rgba(16, 163, 127, 0.2);
+  border-color: rgba(16, 163, 127, 0.5);
 }
 
 .ring-3 {
   width: 180%;
   height: 180%;
-  border-color: rgba(16, 163, 127, 0.1);
+  border-color: rgba(16, 163, 127, 0.3);
+}
+
+/* 波纹动画核心实现 */
+@keyframes ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 1;
+    border-width: 2px;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+    border-width: 0px;
+  }
+}
+
+/* 状态动画 - 波纹启动 */
+.voice-animation.connecting .ring-1,
+.voice-animation.listening .ring-1,
+.voice-animation.speaking .ring-1 {
+  animation: ripple 1.5s ease-out infinite;
+}
+
+.voice-animation.connecting .ring-2,
+.voice-animation.listening .ring-2,
+.voice-animation.speaking .ring-2 {
+  animation: ripple 1.5s ease-out 0.5s infinite;
+}
+
+.voice-animation.connecting .ring-3,
+.voice-animation.listening .ring-3,
+.voice-animation.speaking .ring-3 {
+  animation: ripple 1.5s ease-out 1s infinite;
+}
+
+/* 状态动画 - 旋转加载 */
+.voice-animation.processing .voice-circle {
+  animation: spin 1s linear infinite;
+}
+
+/* 状态动画 - 错误抖动 */
+.voice-animation.error .voice-circle {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.1));
+  animation: shake 0.5s ease-in-out;
+}
+
+/* 状态切换动画类 */
+.voice-animation.status-transition {
+  transition: all 0.3s ease-in-out;
+}
+
+.voice-animation.idle-to-connecting {
+  animation: fadeIn 0.3s ease-in, pulse 1s ease-in-out infinite 0.3s;
+}
+
+.voice-animation.connecting-to-listening {
+  /* 波纹启动，由 .listening 类控制 */
+}
+
+.voice-animation.listening-to-processing {
+  /* 旋转加载，由 .processing 类控制 */
+}
+
+.voice-animation.processing-to-speaking {
+  /* 波纹继续，由 .speaking 类控制 */
+}
+
+.voice-animation.speaking-to-idle {
+  animation: fadeOut 0.3s ease-out;
 }
 
 /* 状态动画 */
@@ -202,31 +324,7 @@
   animation: ripple 2s ease-out 1s infinite;
 }
 
-.voice-animation.processing .voice-circle {
-  animation: rotate 3s linear infinite;
-}
-
-.voice-animation.error .voice-circle {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.1));
-  animation: shake 0.5s ease-in-out;
-}
-
-@keyframes ripple {
-  0% {
-    transform: translate(-50%, -50%) scale(0.8);
-    opacity: 0.8;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1.5);
-    opacity: 0;
-  }
-}
-
-@keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
+/* 保留 shake 动画用于错误状态 */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-10px); }
@@ -325,12 +423,14 @@
   border: none;
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-fast) ease-in-out;
   font-size: 0.9rem;
   font-weight: 600;
   min-width: 100px;
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  position: relative;
+  overflow: hidden;
 }
 
 .control-btn:hover:not(:disabled) {
@@ -345,6 +445,68 @@
 .control-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 按钮点击动画效果 */
+@keyframes btnScale {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes btnShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+@keyframes btnPulse {
+  0%, 100% { transform: scale(1); box-shadow: var(--shadow-md); }
+  50% { transform: scale(1.05); box-shadow: var(--shadow-lg); }
+}
+
+/* 连接按钮 - 点击缩放 + 变色 */
+.btn-connect.clicked {
+  animation: btnScale 0.3s ease-in-out, btnPulse 0.5s ease-in-out;
+}
+
+.btn-connect:active:not(:disabled) {
+  animation: btnScale 0.2s ease-in-out;
+}
+
+/* 挂断按钮 - 点击抖动 + 红色 */
+.btn-hangup.clicked {
+  animation: btnShake 0.5s ease-in-out;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+.btn-hangup:active:not(:disabled) {
+  animation: btnShake 0.3s ease-in-out;
+}
+
+/* 静音按钮 - 点击切换图标 + 颜色 */
+.btn-mic.clicked {
+  animation: btnPulse 0.3s ease-in-out;
+}
+
+.btn-mic.muted.clicked {
+  background: linear-gradient(135deg, var(--color-warning), #d97706);
+  color: white;
+}
+
+.btn-mic:active:not(:disabled) {
+  animation: btnPulse 0.2s ease-in-out;
+}
+
+/* 重试按钮动画 */
+.btn-retry.clicked {
+  animation: btnScale 0.3s ease-in-out;
+}
+
+.btn-retry:active:not(:disabled) {
+  animation: btnScale 0.2s ease-in-out;
 }
 
 .btn-icon {
