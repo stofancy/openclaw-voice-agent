@@ -315,21 +315,24 @@ class AgentGateway:
         """Handle browser WebSocket client"""
         client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
         log(f"🌐 浏览器客户端已连接 (IP: {client_ip})")
-        log(f"📋 WebSocket 状态：{websocket.state}")
-        log(f"🔗 WebSocket 协议：{websocket.protocol}")
-        log(f"👥 当前连接数：{len(self.clients) + 1}")
         self.clients.add(websocket)
         
         try:
             async for message in websocket:
-                if isinstance(message, bytes):
-                    await self.handle_audio(message)
-                else:
-                    await self.handle_json(message)
+                try:
+                    if isinstance(message, bytes):
+                        await self.handle_audio(message)
+                    else:
+                        await self.handle_json(message)
+                except Exception as e:
+                    log(f"❌ 处理消息失败：{e}", "ERROR")
+                    traceback.print_exc()
         
         except websockets.exceptions.ConnectionClosed:
             log(f"🌐 浏览器客户端断开")
-        
+        except Exception as e:
+            log(f"❌ WebSocket 错误：{e}", "ERROR")
+            traceback.print_exc()
         finally:
             self.clients.discard(websocket)
             log(f"当前连接数：{len(self.clients)}")
@@ -629,8 +632,29 @@ class AgentGateway:
 async def main():
     """主函数"""
     gateway = AgentGateway()
-    await gateway.run()
+    
+    # 设置信号处理
+    def signal_handler(sig, frame):
+        log(f"📥 收到信号 {sig}，正在关闭...")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    try:
+        await gateway.run()
+    except Exception as e:
+        log(f"❌ 网关崩溃：{e}", "ERROR")
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log("👋 网关已停止")
+    except Exception as e:
+        log(f"❌ 网关异常退出：{e}", "ERROR")
+        traceback.print_exc()
+        sys.exit(1)
