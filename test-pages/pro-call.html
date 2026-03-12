@@ -861,7 +861,15 @@
         }
 
         // 结束通话
+        let isCallEnding = false;
+        
         function endCall() {
+            if (isCallEnding) {
+                console.log('⚠️  通话已在结束中...');
+                return;
+            }
+            isCallEnding = true;
+            
             console.log('📴 结束通话...');
             
             stopAudioCapture();
@@ -899,6 +907,7 @@
             isMuted = false;
             isSpeaking = false;
             isStreaming = false;
+            isCallEnding = false;
             
             console.log('✅ 通话已结束，资源已清理');
         }
@@ -1030,6 +1039,9 @@
         function sendBrowserLogsToGateway() {
             if (!gateway || !gateway.isConnected()) return;
             
+            let logCount = 0;
+            const MAX_LOGS = 100; // 限制日志数量
+            
             // 拦截 console.log
             const originalLog = console.log;
             const originalError = console.error;
@@ -1037,13 +1049,21 @@
             
             console.log = function(...args) {
                 originalLog.apply(console, args);
+                logCount++;
+                if (logCount > MAX_LOGS) return; // 超过限制不再发送
                 try {
-                    gateway.send({ type: 'browser_log', level: 'log', message: args.join(' ') });
+                    const msg = args.join(' ');
+                    // 只发送重要日志
+                    if (msg.includes('📞') || msg.includes('🎤') || msg.includes('✅') || msg.includes('❌') || msg.includes('开始') || msg.includes('结束') || msg.includes('失败')) {
+                        gateway.send({ type: 'browser_log', level: 'log', message: msg });
+                    }
                 } catch(e) {}
             };
             
             console.error = function(...args) {
                 originalError.apply(console, args);
+                logCount++;
+                if (logCount > MAX_LOGS) return;
                 try {
                     gateway.send({ type: 'browser_log', level: 'error', message: args.join(' ') });
                 } catch(e) {}
@@ -1051,6 +1071,8 @@
             
             console.warn = function(...args) {
                 originalWarn.apply(console, args);
+                logCount++;
+                if (logCount > MAX_LOGS) return;
                 try {
                     gateway.send({ type: 'browser_log', level: 'warn', message: args.join(' ') });
                 } catch(e) {}
