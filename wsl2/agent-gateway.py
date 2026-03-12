@@ -222,6 +222,9 @@ class AgentGateway:
         self.stt_final_text = ""  # 最终识别结果
         self.stt_event = threading.Event()  # STT 完成事件
         
+        # 预初始化 TTS 连接（降低延迟）
+        self.tts_pre_initialized = False
+        
         log("网关初始化完成")
         log("等待客户端连接...")
         log(f"VAD 配置：threshold={self.vad_threshold}, silence={self.silence_duration}s")
@@ -418,12 +421,20 @@ class AgentGateway:
         log(f"🌐 浏览器客户端已连接 (IP: {client_ip})")
         self.clients.add(websocket)
         
-        # 初始化 STT（如果需要）
+        # 预初始化 STT 和 TTS（降低延迟）
         if not self.is_stt_connected:
             try:
                 self.init_stt()
             except Exception as e:
                 log(f"⚠️  STT 初始化失败：{e}", "WARN")
+        
+        if not self.tts_pre_initialized:
+            try:
+                self.init_tts()
+                self.tts_pre_initialized = True
+                log("✅ TTS 预初始化完成", "INFO")
+            except Exception as e:
+                log(f"⚠️  TTS 预初始化失败：{e}", "WARN")
         
         try:
             async for message in websocket:
@@ -532,7 +543,7 @@ class AgentGateway:
                         self.speech_start = None
     
     async def _process_speech_end(self) -> None:
-        """说话结束处理：STT → Agent → TTS (流式 STT)"""
+        """说话结束处理：STT → Agent → TTS (流式 STT + 并行优化)"""
         try:
             # 发送状态到客户端
             await self.send_to_clients_async({
@@ -572,13 +583,22 @@ class AgentGateway:
             })
             log(f"📤 发送 stt_result: {stt_text}", "DEBUG")
             
-            # 调用 Agent
+            # 并行优化：在调用 Agent 时检查 TTS 连接状态
             await self.send_to_clients_async({
                 "type": "status",
                 "status": "processing"
             })
             log("📤 发送 status=processing", "DEBUG")
             
+            # 确保 TTS 连接正常（预初始化后应该已连接）
+            if not self.is_tts_connected or not self.tts_realtime:
+                log("🔄 TTS 未连接，重新初始化...", "INFO")
+                try:
+                    self.init_tts()
+                except Exception as e:
+                    log(f"⚠️  TTS 重连失败：{e}", "WARN")
+            
+            # 调用 Agent（同步）
             reply = self.send_to_agent(stt_text)
             log(f"🤖 Agent 回复：{reply[:100]}...")
             
@@ -589,7 +609,7 @@ class AgentGateway:
             })
             log(f"📤 发送 reply: {reply[:50]}...", "DEBUG")
             
-            # TTS 合成
+            # TTS 合成（TTS 已预初始化，降低延迟）
             if reply:
                 log_event('tts', '开始合成语音')
                 self.call_tts(reply)
