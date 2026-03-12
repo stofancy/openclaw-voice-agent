@@ -1140,9 +1140,41 @@
             };
         }
         
+        // 拦截 Console 日志并发送到网关
+        function setupConsoleInterceptor() {
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            
+            function sendToGateway(level, args) {
+                const message = Array.from(args).map(a => String(a)).join(' ');
+                if (gateway && gateway.isConnected()) {
+                    gateway.send({ type: 'browser_log', level, message });
+                }
+            }
+            
+            console.log = function(...args) {
+                originalLog.apply(console, args);
+                sendToGateway('log', args);
+            };
+            
+            console.error = function(...args) {
+                originalError.apply(console, args);
+                sendToGateway('error', args);
+            };
+            
+            console.warn = function(...args) {
+                originalWarn.apply(console, args);
+                sendToGateway('warn', args);
+            };
+        }
+        
         // 页面加载
         window.addEventListener('DOMContentLoaded', () => {
             console.log('📱 页面已加载');
+            
+            // 设置 Console 拦截器
+            setupConsoleInterceptor();
             
             updateCallStatusText('准备就绪');
             updateAgentStatus('ready');
