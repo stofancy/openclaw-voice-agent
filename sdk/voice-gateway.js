@@ -292,6 +292,11 @@ class VoiceGateway {
      * @param {string} base64Audio - Base64 编码的 PCM 音频
      */
     playAudio(base64Audio) {
+        // 再次检查播放状态
+        if (this.isPlaying) {
+            console.log('⚠️ playAudio: 正在播放，拒绝');
+            return;
+        }
         this._playAudioBase64(base64Audio);
     }
     
