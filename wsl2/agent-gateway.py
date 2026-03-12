@@ -373,60 +373,70 @@ class AgentGateway:
                         if speech_duration >= self.min_speech_duration:
                             # 说话结束，处理音频
                             log_event('speaking', f'结束 (持续 {speech_duration:.2f}s)')
+                            # 累积音频已经有数据了，直接处理
                             asyncio.create_task(self._process_speech_end())
                         else:
                             log(f"⚠️  语音太短 ({speech_duration:.2f}s)，忽略")
                         
                         # 重置状态
                         self.is_speaking = False
-                        self.audio_buffer = bytearray()
                         self.silence_start = None
                         self.speech_start = None
     
     async def _process_speech_end(self) -> None:
         """说话结束处理：STT → Agent → TTS"""
         if len(self.audio_buffer) == 0:
+            log("⚠️  音频缓冲区为空，跳过处理", "WARN")
             return
         
         log(f"📦 处理语音数据：{len(self.audio_buffer)} bytes")
         
-        # 发送状态到客户端
-        await self.send_to_clients_async({
-            "type": "status",
-            "status": "recognizing"
-        })
-        
-        # TODO: 调用百炼 STT API
-        # 暂时使用占位符
-        stt_text = "识别的文本"  # 需要调用 STT API
-        
-        log(f"📝 STT 识别结果：{stt_text}")
-        
-        # 发送识别结果到客户端 (用于字幕)
-        await self.send_to_clients_async({
-            "type": "stt_result",
-            "text": stt_text,
-            "is_final": True
-        })
-        
-        # 调用 Agent
-        await self.send_to_clients_async({
-            "type": "status",
-            "status": "processing"
-        })
-        
-        reply = self.send_to_agent(stt_text)
-        log(f"🤖 Agent 回复：{reply[:100]}...")
-        
-        # 发送 Agent 回复 (用于字幕)
-        await self.send_to_clients_async({
-            "type": "agent_reply",
-            "text": reply
-        })
-        
-        # TTS 合成
-        if reply:
-            self.call_tts(reply)
+        try:
+            # 发送状态到客户端
+            await self.send_to_clients_async({
+                "type": "status",
+                "status": "recognizing"
+            })
+            log("📤 发送 status=recognizing", "DEBUG")
+            
+            # TODO: 调用百炼 STT API
+            # 暂时使用占位符
+            stt_text = "识别的文本"  # 需要调用 STT API
+            
+            log(f"📝 STT 识别结果：{stt_text}")
+            
+            # 发送识别结果到客户端 (用于字幕)
+            await self.send_to_clients_async({
+                "type": "stt_result",
+                "text": stt_text,
+                "is_final": True
+            })
+            log(f"📤 发送 stt_result: {stt_text}", "DEBUG")
+            
+            # 调用 Agent
+            await self.send_to_clients_async({
+                "type": "status",
+                "status": "processing"
+            })
+            log("📤 发送 status=processing", "DEBUG")
+            
+            reply = self.send_to_agent(stt_text)
+            log(f"🤖 Agent 回复：{reply[:100]}...")
+            
+            # 发送 Agent 回复 (用于字幕)
+            await self.send_to_clients_async({
+                "type": "reply",
+                "text": reply
+            })
+            log(f"📤 发送 reply: {reply[:50]}...", "DEBUG")
+            
+            # TTS 合成
+            if reply:
+                log_event('tts', '开始合成语音')
+                self.call_tts(reply)
+                log("✅ TTS 调用完成", "DEBUG")
+        except Exception as e:
+            log(f"❌ _process_speech_end 错误：{e}", "ERROR")
     
     async def handle_json(self, message: str) -> None:
         """处理 JSON 消息"""

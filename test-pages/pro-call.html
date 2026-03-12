@@ -1014,6 +1014,8 @@
             }
         }
 
+        let lastSpeakingDuration = 0;
+        
         function stopAudioCapture() {
             if (audioProcessor) {
                 if (gateway && gateway.isConnected() && isStreaming) {
@@ -1023,6 +1025,13 @@
 
                 audioProcessor.disconnect();
                 audioProcessor = null;
+                
+                // 如果刚才有说话，触发 STT 识别
+                if (lastSpeakingDuration > 0.5) {
+                    console.log(`📝 触发 STT 识别 (说话时长：${lastSpeakingDuration.toFixed(2)}s)`);
+                    // 注意：实际 STT 由网关处理，这里只需要等待网关回复
+                }
+                lastSpeakingDuration = 0;
             }
         }
 
