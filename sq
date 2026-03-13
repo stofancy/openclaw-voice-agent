@@ -1,0 +1,124 @@
+[33md3bc187 [31m2026-03-14 [34mArchitect Agent[32m (HEAD -> feature/voice-agent-refactor) [mfix: STT 错误处理改进
+[33m6b85880 [31m2026-03-14 [34mArchitect Agent[32m [mfix: 前端使用 wav 格式录音
+[33m487202f [31m2026-03-14 [34mArchitect Agent[32m [mclean: 清理测试文件
+[33m5b604f6 [31m2026-03-14 [34mArchitect Agent[32m [mfix: 修复 STT 和 TTS 服务使用正确的模型和格式
+[33m972d37f [31m2026-03-14 [34mArchitect Agent[32m [mfix: STT 和 TTS 测试通过，修复模型名称
+[33m8802f79 [31m2026-03-14 [34mArchitect Agent[32m [mfix: TTS 测试成功，修复 AudioFormat 使用
+[33mccc31d2 [31m2026-03-14 [34mArchitect Agent[32m [mfix: 修复 API key 加载和 queue 使用
+[33m2860151 [31m2026-03-14 [34mArchitect Agent[32m [mfix: 修复 TTS 服务初始化参数
+[33ma8f4cd1 [31m2026-03-14 [34mArchitect Agent[32m [mfeat: 使用阿里官方示例协议实现 STT 和 TTS
+[33me2288fb [31m2026-03-14 [34mArchitect Agent[32m [mfix: 使用 additional_headers 而非 extra_headers
+[33md70dcfd [31m2026-03-14 [34mArchitect Agent[32m [mfix: 使用 openclaw CLI 调用 agent
+[33m766f436 [31m2026-03-14 [34mArchitect Agent[32m [mfix: 修复 WebSocket 认证方式，使用 URL query 参数
+[33ma552bb4 [31m2026-03-14 [34mArchitect Agent[32m [mfix: 直接发送音频到后端进行 STT 处理
+[33m6083bc3 [31m2026-03-14 [34mArchitect Agent[32m [mfeat: 使用阿里百炼 WebSocket 实时 API 实现 STT 和 TTS
+[33me0290ee [31m2026-03-14 [34mArchitect Agent[32m [mfix: STT 失败时使用 mock 响应
+[33m9545049 [31m2026-03-14 [34mArchitect Agent[32m [mfeat: 支持处理文本消息
+[33mf3bc31e [31m2026-03-14 [34mArchitect Agent[32m [mfeat: 使用 Web Speech API 进行实时语音识别
+[33mc3ebf67 [31m2026-03-14 [34mArchitect Agent[32m [mfix: 使用正确的 dashscope SDK API
+[33m1dc4d2c [31m2026-03-14 [34mArchitect Agent[32m [mfix: 读取 ALI_BAILIAN_API_KEY 环境变量
+[33m02ea8af [31m2026-03-14 [34mArchitect Agent[32m [mfix: 停止录音时不停止 track，允许再次录音
+[33m57566f6 [31m2026-03-13 [34mArchitect Agent[32m [mfeat: 实现 US-01 至 US-06 核心功能
+[33m088a399 [31m2026-03-13 [34mArchitect Agent[32m [mdocs: 添加详细用户故事和测试用例 (v2)
+[33mf7a6733 [31m2026-03-13 [34mArchitect Agent[32m [mdocs: 添加用户故事和测试用例
+[33m7f26d14 [31m2026-03-13 [34mArchitect Agent[32m [mrefactor: 删除旧代码，从头开始重构
+[33mfba7034 [31m2026-03-13 [34mArchitect Agent[32m [mdocs: 添加详细架构设计文档 (v3)
+[33m9472da8 [31m2026-03-13 [34mArchitect Agent[32m (origin/master, master) [mfix: 修复测试端口配置 (8080→5173) 并添加超时保护
+[33m6476980 [31m2026-03-13 [34mArchitect Agent[32m [mfeat: 添加网关测试文件（WebSocket/音频流/TTS 回调）
+[33m000411b [31m2026-03-13 [34mArchitect Agent[32m [mfeat(3-D): 错误处理 + 性能优化
+[33m4659f24 [31m2026-03-13 [34mArchitect Agent[32m [mfeat(3-E): 端到端测试
+[33ma47ff2e [31m2026-03-13 [34mArchitect Agent[32m [mfeat(3-C): travel-agency 集成测试
+[33m670318d [31m2026-03-13 [34mArchitect Agent[32m [mfeat: 提升动画测试覆盖率至 85.3%
+[33m391ca07 [31m2026-03-13 [34mArchitect Agent[32m [mfix: 修复动画测试正则表达式（支持多行匹配）
+[33mb744703 [31m2026-03-13 [34mArchitect Agent[32m [mfeat(3-B): 动画效果（波纹动画 + 状态切换）
+[33m44aa275 [31m2026-03-13 [34mArchitect Agent[32m [mdocs(3-A-1): 前端代码结构分析
+[33mc8c8245 [31m2026-03-13 [34mArchitect Agent[32m [mfeat(stage-3-A): UI 重构（Mobile First + ChatGPT 风格）
+[33m79ec5ca [31m2026-03-13 [34mArchitect Agent[32m [mfeat(stage-2): 流式 LLM + AI 字幕 + 打字机效果
+[33m006e267 [31m2026-03-13 [34mArchitect Agent[32m [mtest(1.5-D): 新架构单元测试，覆盖率→100%
+[33m7150808 [31m2026-03-13 [34mArchitect Agent[32m [mrefactor(1.5-C): 重构网关使用依赖注入，删除废弃代码
+[33m18f7e94 [31m2026-03-13 [34mArchitect Agent[32m [mfeat(1.5-B): 依赖注入 + handlers 封装，清理废弃代码
+[33m29b5232 [31m2026-03-13 [34mArchitect Agent[32m [m阶段 1.5-A: 定义核心接口 (WsClient, SttApi, TtsApi, AgentClient)
+[33mfba2701 [31m2026-03-13 [34mArchitect Agent[32m [mfix: 适配新版 dashscope API + 提高测试覆盖率
+[33m220504a [31m2026-03-12 [34mArchitect Agent[32m [mfeat(阶段一): 实现流式 STT + 实时字幕
+[33ma2e0b57 [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加实时语音对话功能开发报告
+[33m225d7e8 [31m2026-03-12 [34mArchitect Agent[32m [mperf: 优化端到端延迟 (STT+LLM+TTS 并行处理)
+[33mceea8c1 [31m2026-03-12 [34mArchitect Agent[32m [mtest: 添加麦克风权限和 WebSocket 连接测试
+[33m41bdd70 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 集成实时流式 STT (paraformer-realtime-v2)
+[33m32adb54 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修正图标路径为相对路径
+[33mcf40e38 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 Vite 构建路径问题
+[33mc00c538 [31m2026-03-12 [34mArchitect Agent[32m [mchore: 清理代码仓库
+[33mb188057 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复所有 ESLint 错误
+[33m057b73a [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 ESLint 错误
+[33m9317cc5 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 使用现代前端工具链重构
+[33me2c7731 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复音频测试页面语法错误
+[33m2a18436 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 彻底清理 Console 拦截器代码
+[33m31cb078 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 彻底修复看门狗管理冲突
+[33m13f6b8d [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 Console 日志在 gateway 连接前丢失的问题
+[33m7e560f3 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加详细时间戳日志便于诊断叠加问题
+[33m35e7902 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 保持 source 引用防止被垃圾回收
+[33m709b036 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 增强清理逻辑
+[33m7885e24 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 gateway 实例叠加问题
+[33m5dcf74e [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 AudioContext 播放问题
+[33ma341ece [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加详细 TTS 播放日志
+[33m3f5f582 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复音频队列逻辑错误
+[33m59becc9 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 移除前端 _isPlayingTTS 标志
+[33m84959dd [31m2026-03-12 [34mArchitect Agent[32m [mfix: 移除 onended 延迟
+[33m2b2c843 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 TTS 提前结束问题
+[33maa6e818 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 严格防止 TTS 音频重叠（最终修复）
+[33m7aca379 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复测试逻辑问题
+[33mee3a571 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加 Console 日志数组存储
+[33m426c0ab [31m2026-03-12 [34mArchitect Agent[32m [mfix: 严格防止 TTS 音频重叠
+[33m12390c6 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 TTS 音频队列重叠问题
+[33m16d1076 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加网关看门狗和异常处理
+[33m36191c4 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复事件循环问题和 TTS 重复调用
+[33m2108196 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加 Console 日志拦截器
+[33me59c774 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 TTS 声音重叠问题
+[33ma21133f [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加 TTS 播放详细日志
+[33m74b402b [31m2026-03-12 [34mArchitect Agent[32m [mtest: 添加 TTS 播放测试 (18 用例)
+[33mb27ac1d [31m2026-03-12 [34mArchitect Agent[32m [mfix: 挂断时重置音量和说话状态
+[33m07de556 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: build 脚本添加 UI 状态测试
+[33m851b869 [31m2026-03-12 [34mArchitect Agent[32m [mtest: 添加 UI 状态管理测试 (42 用例)
+[33ma1a240f [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复音量和说话状态动画问题
+[33m566d62a [31m2026-03-12 [34mArchitect Agent[32m [mfeat: build 脚本添加覆盖率提升测试
+[33m44c6ed3 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加覆盖率提升测试 (85 用例)
+[33m92c7157 [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加最终测试报告
+[33me583c5f [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复前端测试用例
+[33m75040ac [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 用 Playwright 实现前端测试框架
+[33mda06b69 [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加测试框架文档
+[33m53394da [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加 Build 脚本和网关单元测试
+[33m40d0d89 [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加测试覆盖率报告
+[33meb8e022 [31m2026-03-12 [34mArchitect Agent[32m [mtest: 添加完整测试套件
+[33m69225f8 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 TTS 重复播放和 STT 模型错误
+[33mb774e13 [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加最终测试报告
+[33m2efad57 [31m2026-03-12 [34mArchitect Agent[32m [mtest: 添加单元测试和 E2E 测试
+[33mf0f8c4b [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 STT API 调用和 TTS 线程安全
+[33m7f43d7d [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 VAD 灵敏度和 TTS 重叠播放问题
+[33m25b2405 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 集成百炼 STT API
+[33m9e15949 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 STT 触发和消息发送问题
+[33m05d17db [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 创建网关保活机制
+[33m10e838c [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复浏览器日志内容显示
+[33m55acc46 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复浏览器日志阻塞和连接断开问题
+[33m313ad68 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 WebSocket 同步发送问题
+[33m93659cd [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 建立全自动日志收集系统
+[33me24dd20 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 创建网关守护启动脚本
+[33m62a2c2b [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加音频采集调试日志
+[33m8ad6130 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 优化 VAD 检测和聆听状态
+[33me719912 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复多个 UI 和状态问题
+[33m2747bc1 [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 更新最终测试报告 (100% 通过)
+[33m0b86b10 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 TTS 连接未重连问题
+[33m608139c [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加 Bug 修复报告 #1
+[33m50f38a8 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复重复 onError 回调语法错误
+[33m7b3cd4a [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 添加简单日志查看器
+[33m8529da7 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 增强日志系统
+[33md236001 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复 startCall 未定义错误
+[33mb5152d4 [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复点击无响应问题
+[33m295715b [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加最终交付总结
+[33m57555d4 [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加最终测试报告
+[33ma3e89aa [31m2026-03-12 [34mArchitect Agent[32m [mfix: 修复字幕和 TTS 播放问题
+[33m500f7f7 [31m2026-03-12 [34mArchitect Agent[32m [mstyle: 优化桌面端显示效果
+[33m1f3eb8a [31m2026-03-12 [34mArchitect Agent[32m [mfix: 添加拨号按钮
+[33m725642d [31m2026-03-12 [34mArchitect Agent[32m [mdocs: 添加完整开发文档
+[33m20dfa54 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 专业级 UI 设计 (Mobile First)
+[33m0fe9978 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 浏览器端实现实时音频流发送
+[33mabac02b [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 实现实时音频流处理和 VAD 检测
+[33me265897 [31m2026-03-12 [34mArchitect Agent[32m [mfeat: 初始化项目结构和文档

@@ -44,7 +44,7 @@ class STTService:
             try:
                 data = json.loads(message)
                 event_type = data.get("type", "")
-                print(f"STT received: {event_type}")
+                print(f"STT received: {event_type}, full: {data}")
                 
                 # Check for transcription result in conversation.item events
                 if event_type == "conversation.item.input_audio_transcription.text":

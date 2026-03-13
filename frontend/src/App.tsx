@@ -53,9 +53,18 @@ function App() {
     // Send audio to backend for STT processing
     if (audioBlob && webRTCState.isConnected) {
       try {
-        // Convert blob to base64
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        // Convert blob to base64 using FileReader (avoids stack overflow with large data)
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Remove data URL prefix if present
+            const base64Data = result.includes(',') ? result.split(',')[1] : result;
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(audioBlob);
+        });
         
         // Send via WebSocket to backend for STT -> Agent -> TTS
         webRTCActions.sendAudioData(base64, 'webm');
