@@ -21,11 +21,11 @@ class WebRTCServer:
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.turn_counter = 0  # Track conversation turns
         
-        # Initialize services
-        api_key = config.dashscope_api_key or os.getenv("ALI_BAILIAN_API_KEY", "")
-        self.stt_service = STTService(api_key)
+        # Initialize services with 百炼 configuration
+        api_key = config.bailian_api_key
+        self.stt_service = STTService(api_key, config.bailian_asr_url)
         self.agent_client = AgentClient()
-        self.tts_service = TTSService(api_key)
+        self.tts_service = TTSService(api_key, config.bailian_tts_url)
         
         # Processing lock to prevent concurrent requests
         self._is_processing = False

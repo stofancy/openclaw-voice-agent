@@ -1,21 +1,24 @@
 """
-Text-to-Speech service using Alibaba Cloud dashscope SDK
+Text-to-Speech service using Alibaba Cloud sambert-realtime via WebSocket
 """
-import dashscope
-from dashscope.audio.tts import SpeechSynthesizer
+import asyncio
+import json
+import base64
+import websockets
 from typing import Optional
 import os
 
 
 class TTSService:
-    """Alibaba Cloud TTS service using dashscope SDK"""
+    """Alibaba Cloud sambert-realtime TTS service via WebSocket"""
     
-    def __init__(self, api_key: str):
-        dashscope.api_key = api_key
-        self.model = "tts-199"
+    def __init__(self, api_key: str, ws_url: str = None):
+        self.api_key = api_key
+        self.ws_url = ws_url or os.getenv("BAILIAN_TTS_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/realtime")
+        self.model = os.getenv("BAILIAN_TTS_MODEL", "sambert-realtime")
         
     async def synthesize(self, text: str, voice: str = "xiaoyun") -> Optional[str]:
-        """Synthesize text to speech
+        """Synthesize text to speech via WebSocket
         
         Args:
             text: Text to synthesize
@@ -28,30 +31,46 @@ class TTSService:
             return None
             
         try:
-            # Use synchronous call in async context
-            import asyncio
-            loop = asyncio.get_event_loop()
+            # Build authentication header
+            auth_header = base64.b64encode(f"api-key:{self.api_key}".encode()).decode()
             
-            result = await loop.run_in_executor(
-                None,
-                lambda: SpeechSynthesizer.call(
-                    model=self.model,
-                    text=text,
-                    format="mp3",
-                    sample_rate=32000,
-                    voice=voice
-                )
-            )
+            audio_chunks = []
             
-            if result.get_audio_data():
-                import base64
-                return base64.b64encode(result.get_audio_data()).decode('utf-8')
-            else:
-                print(f"TTS result: {result}")
-                return None
+            async with websockets.connect(
+                self.ws_url,
+                extra_headers={"Authorization": auth_header}
+            ) as ws:
+                # Send start task message
+                start_msg = {
+                    "model": self.model,
+                    "task": "tts",
+                    "input": {
+                        "text": text,
+                        "voice": voice,
+                        "format": "mp3",
+                        "sample_rate": 32000
+                    },
+                    "parameters": {}
+                }
+                await ws.send(json.dumps(start_msg))
                 
+                # Receive audio chunks
+                async for msg in ws:
+                    data = json.loads(msg)
+                    if data.get("type") == "audio":
+                        if "output" in data and "audio" in data["output"]:
+                            audio_chunks.append(data["output"]["audio"])
+                    elif data.get("type") == "done":
+                        break
+                    elif data.get("type") == "error":
+                        print(f"TTS error: {data.get('message')}")
+                        break
+                
+                if audio_chunks:
+                    return "".join(audio_chunks)
+                        
         except Exception as e:
-            print(f"TTS error: {e}")
+            print(f"TTS WebSocket error: {e}")
             return None
         
         return None
