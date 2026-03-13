@@ -6,15 +6,17 @@ import sys
 import os
 from pathlib import Path
 
-# Load .env file
-env_path = Path(__file__).parent.parent / ".env"
+# Load .env file (project root)
+env_path = Path(__file__).parent.parent.parent / ".env"
 if env_path.exists():
+    print(f"Loading .env from {env_path}")
     with open(env_path) as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#"):
                 key, value = line.split("=", 1)
                 os.environ[key] = value
+    print(f"Loaded API key: {os.environ.get('ALI_BAILIAN_API_KEY', 'NOT SET')[:10]}...")
 
 from .config import Config
 from .webrtc_server import WebRTCServer
