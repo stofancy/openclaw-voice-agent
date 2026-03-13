@@ -1,6 +1,5 @@
 """
 Speech-to-Text service using Alibaba Cloud Qwen3-ASR-Flash-Realtime
-Based on official example: https://help.aliyun.com/document_detail/2959876.html
 """
 import os
 import json
@@ -23,7 +22,7 @@ class STTService:
         """Transcribe audio data to text
         
         Args:
-            audio_data: Base64 encoded audio data
+            audio_data: Base64 encoded audio data (webm format)
             
         Returns:
             Transcribed text or None if failed
@@ -31,9 +30,61 @@ class STTService:
         if not audio_data:
             return None
             
+        # Convert webm to PCM first
+        pcm_data = self._convert_webm_to_pcm(audio_data)
+        if not pcm_data:
+            print("Failed to convert webm to PCM, trying original data")
+            pcm_data = audio_data
+            
         # Run in thread since websocket-client is synchronous
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._transcribe_sync, audio_data)
+        return await loop.run_in_executor(None, self._transcribe_sync, pcm_data)
+    
+    def _convert_webm_to_pcm(self, webm_data: str) -> Optional[str]:
+        """Convert webm audio to PCM using ffmpeg"""
+        import subprocess
+        import tempfile
+        import os
+        
+        try:
+            # Decode base64
+            audio_bytes = base64.b64decode(webm_data)
+            
+            # Create temp files
+            with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as input_file:
+                input_file.write(audio_bytes)
+                input_path = input_file.name
+            
+            output_path = input_path.replace('.webm', '.pcm')
+            
+            # Use ffmpeg to convert
+            result = subprocess.run(
+                ['ffmpeg', '-i', input_path, '-acodec', 'pcm_s16le', 
+                 '-ar', '16000', '-ac', '1', '-f', 's16le', output_path, '-y'],
+                capture_output=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                print(f"ffmpeg error: {result.stderr.decode()}")
+                # Clean up
+                os.unlink(input_path) if os.path.exists(input_path) else None
+                return None
+            
+            # Read PCM data
+            with open(output_path, 'rb') as f:
+                pcm_bytes = f.read()
+            
+            # Clean up
+            os.unlink(input_path) if os.path.exists(input_path) else None
+            os.unlink(output_path) if os.path.exists(output_path) else None
+            
+            # Return base64 encoded PCM
+            return base64.b64encode(pcm_bytes).decode('utf-8')
+            
+        except Exception as e:
+            print(f"Convert error: {e}")
+            return None
     
     def _transcribe_sync(self, audio_data: str) -> Optional[str]:
         """Synchronous transcription using websocket-client"""
@@ -46,14 +97,13 @@ class STTService:
                 event_type = data.get("type", "")
                 print(f"STT received: {event_type}")
                 
-                # Check for transcription result - look for completed transcript
+                # Check for transcription result
                 if event_type == "conversation.item.input_audio_transcription.completed":
                     transcript = data.get("transcript", "")
                     if transcript:
                         print(f"STT got transcript: {transcript}")
                         result_queue.put(transcript)
                         
-                # Also check for text events with stash (interim results)
                 elif event_type == "conversation.item.input_audio_transcription.text":
                     transcript = data.get("transcript", "") or data.get("stash", "")
                     if transcript:
@@ -64,7 +114,6 @@ class STTService:
         
         def on_error(ws, error):
             print(f"STT WebSocket error: {error}")
-            # Continue waiting for messages even after error
         
         def on_close(ws, close_status_code, close_msg):
             print(f"STT closed: {close_status_code} - {close_msg}")
