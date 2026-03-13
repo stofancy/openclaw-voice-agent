@@ -63,6 +63,7 @@ class STTService:
         
         def on_error(ws, error):
             print(f"STT WebSocket error: {error}")
+            # Continue waiting for messages even after error
         
         def on_close(ws, close_status_code, close_msg):
             print(f"STT closed: {close_status_code} - {close_msg}")
