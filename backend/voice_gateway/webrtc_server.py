@@ -82,6 +82,9 @@ class WebRTCServer:
         elif message_type == "ping":
             # Simple ping-pong for connection health
             await websocket.send(json.dumps({"type": "pong"}))
+        elif message_type == "text-message":
+            # Handle text message from client (from Web Speech API)
+            await self.handle_text_message(websocket, data)
         else:
             print(f"Unknown message type: {message_type}")
             await websocket.send(json.dumps({
@@ -299,6 +302,90 @@ class WebRTCServer:
             
         except Exception as e:
             print(f"Error processing audio: {e}")
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": f"处理出错: {str(e)}"
+            }))
+        finally:
+            self._is_processing = False
+    
+    async def handle_text_message(self, websocket: websockets.WebSocketServerProtocol, data: dict):
+        """Handle text message from client (Web Speech API)."""
+        text = data.get("text")
+        if not text:
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": "Missing text"
+            }))
+            return
+        
+        # Prevent concurrent processing
+        if self._is_processing:
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": "Still processing previous request"
+            }))
+            return
+        
+        self._is_processing = True
+        current_turn = self.turn_counter
+        self.turn_counter += 1
+        
+        try:
+            print(f"[Turn {current_turn}] User said (text): {text}")
+            
+            # Send thinking status
+            await websocket.send(json.dumps({
+                "type": "status",
+                "status": "thinking",
+                "message": "正在思考..."
+            }))
+            
+            # Call Agent
+            agent_response = await self.agent_client.process_message(text)
+            
+            if not agent_response:
+                agent_response = "抱歉，我暂时无法处理您的请求。"
+                
+            print(f"[Turn {current_turn}] Agent response: {agent_response}")
+            
+            # Send thinking status
+            await websocket.send(json.dumps({
+                "type": "status",
+                "status": "speaking",
+                "message": "正在生成语音..."
+            }))
+            
+            # TTS
+            audio_response = await self.tts_service.synthesize(agent_response)
+            
+            if not audio_response:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": "语音合成失败"
+                }))
+                return
+                
+            # Send the audio response
+            response_msg = {
+                "type": "audio-response",
+                "audio": audio_response,
+                "text": agent_response,
+                "timestamp": data.get("timestamp", 0),
+                "turn_id": current_turn,
+                "is_new_turn": True
+            }
+            await websocket.send(json.dumps(response_msg))
+            
+            # Send completion status
+            await websocket.send(json.dumps({
+                "type": "status",
+                "status": "idle",
+                "message": ""
+            }))
+            
+        except Exception as e:
+            print(f"Error processing text: {e}")
             await websocket.send(json.dumps({
                 "type": "error",
                 "message": f"处理出错: {str(e)}"
