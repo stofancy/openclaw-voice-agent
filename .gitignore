@@ -40,3 +40,7 @@ test_audio/
 # Build
 dist/
 build/
+
+# Coverage
+.coverage
+htmlcov/
