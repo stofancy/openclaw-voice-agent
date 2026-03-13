@@ -118,6 +118,7 @@ export function useAudioRecorder() {
       
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.log('Speech recognition error:', event.error);
+        // Continue recording even if speech recognition fails - we'll send audio data
       };
       
       recognition.start();
