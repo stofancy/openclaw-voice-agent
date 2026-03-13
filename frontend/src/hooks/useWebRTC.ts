@@ -12,6 +12,7 @@ interface WebRTCActions {
   sendOffer: (offer: RTCSessionDescriptionInit) => Promise<void>;
   addIceCandidate: (candidate: RTCIceCandidateInit) => Promise<void>;
   sendAudioData: (audioData: string, format?: string) => Promise<void>;
+  sendTextMessage: (text: string) => Promise<void>;
   onAiResponse: (callback: (audioData: string, turnId: number) => void) => void;
   onAiFinished: (callback: () => void) => void;
 }
@@ -251,6 +252,16 @@ export function useWebRTC(wsUrl: string = DEFAULT_WS_URL): [WebRTCState, WebRTCA
     }
   };
   
+  const sendTextMessage = async (text: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      await wsRef.current.send(JSON.stringify({
+        type: 'text-message',
+        text: text,
+        timestamp: Date.now()
+      }));
+    }
+  };
+  
   const onAiResponse = useCallback((callback: (audioData: string, turnId: number) => void) => {
     aiResponseCallbacks.current.push(callback);
   }, []);
@@ -286,6 +297,7 @@ export function useWebRTC(wsUrl: string = DEFAULT_WS_URL): [WebRTCState, WebRTCA
       sendOffer,
       addIceCandidate,
       sendAudioData,
+      sendTextMessage,
       onAiResponse,
       onAiFinished
     }

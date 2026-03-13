@@ -47,20 +47,23 @@ function App() {
   };
 
   const handleStopRecording = async () => {
-    const audioBlob = await stopRecording();
+    const { audioBlob, text: transcribedText } = await stopRecording();
     setConversationStatus('thinking');
     
-    // Send audio to backend if we have a recording
-    if (audioBlob && webRTCState.isConnected) {
+    // Send to backend - either transcribed text or audio
+    if (webRTCState.isConnected) {
       try {
-        // Convert blob to base64
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-        
-        // Send via WebRTC data channel
-        webRTCActions.sendAudioData(base64, 'webm');
+        if (transcribedText) {
+          // Send transcribed text directly
+          webRTCActions.sendTextMessage(transcribedText);
+        } else if (audioBlob) {
+          // Send audio data as fallback
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          webRTCActions.sendAudioData(base64, 'webm');
+        }
       } catch (err) {
-        console.error('Failed to send audio:', err);
+        console.error('Failed to send:', err);
       }
     }
   };
