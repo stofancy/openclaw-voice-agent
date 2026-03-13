@@ -44,17 +44,18 @@ class STTService:
             try:
                 data = json.loads(message)
                 event_type = data.get("type", "")
-                print(f"STT received: {event_type}, full: {data}")
+                print(f"STT received: {event_type}")
                 
-                # Check for transcription result in conversation.item events
-                if event_type == "conversation.item.input_audio_transcription.text":
+                # Check for transcription result - look for completed transcript
+                if event_type == "conversation.item.input_audio_transcription.completed":
                     transcript = data.get("transcript", "")
                     if transcript:
+                        print(f"STT got transcript: {transcript}")
                         result_queue.put(transcript)
                         
-                # Also check for done event
-                elif event_type == "response.audio_transcript.done":
-                    transcript = data.get("transcript", {}).get("text", "")
+                # Also check for text events with stash (interim results)
+                elif event_type == "conversation.item.input_audio_transcription.text":
+                    transcript = data.get("transcript", "") or data.get("stash", "")
                     if transcript:
                         result_queue.put(transcript)
                         

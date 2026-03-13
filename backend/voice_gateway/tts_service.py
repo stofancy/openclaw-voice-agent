@@ -51,6 +51,32 @@ class TTSCallback(QwenTtsRealtimeCallback):
         return self.complete_event.wait(timeout)
 
 
+def add_wav_header(audio_data: bytes, sample_rate: int = 24000, num_channels: int = 1, bits_per_sample: int = 16) -> bytes:
+    """Add WAV header to raw PCM data"""
+    import struct
+    
+    data_size = len(audio_data)
+    file_size = 36 + data_size
+    
+    wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
+        b'RIFF',           # ChunkID
+        file_size,         # ChunkSize
+        b'WAVE',           # Format
+        b'fmt ',           # Subchunk1ID
+        16,                # Subchunk1Size (PCM)
+        1,                 # AudioFormat (PCM)
+        num_channels,      # NumChannels
+        sample_rate,       # SampleRate
+        sample_rate * num_channels * bits_per_sample // 8,  # ByteRate
+        num_channels * bits_per_sample // 8,  # BlockAlign
+        bits_per_sample,   # BitsPerSample
+        b'data',           # Subchunk2ID
+        data_size          # Subchunk2Size
+    )
+    
+    return wav_header + audio_data
+
+
 class TTSService:
     """Alibaba Cloud Qwen3-TTS-Flash-Realtime TTS service"""
     
@@ -66,7 +92,7 @@ class TTSService:
             voice: Voice name
             
         Returns:
-            Base64 encoded audio data or None if failed
+            Base64 encoded audio data (WAV format) or None if failed
         """
         if not text:
             return None
@@ -107,9 +133,14 @@ class TTSService:
             # Wait for completion
             callback.wait_for_finished(30)
             
-            # Combine audio chunks
+            # Combine audio chunks and convert to WAV
             if callback.audio_chunks:
-                return ''.join(callback.audio_chunks)
+                audio_data = ''.join(callback.audio_chunks)
+                audio_bytes = base64.b64decode(audio_data)
+                
+                # Add WAV header for browser compatibility
+                wav_data = add_wav_header(audio_bytes, 24000, 1, 16)
+                return base64.b64encode(wav_data).decode('utf-8')
             else:
                 print("No audio chunks received")
                 return None
