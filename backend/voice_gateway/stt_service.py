@@ -1,24 +1,26 @@
 """
-Speech-to-Text service using Alibaba Cloud paraformer-realtime via WebSocket
+Speech-to-Text service using Alibaba Cloud Qwen3-ASR-Flash-Realtime
+Based on official example: https://help.aliyun.com/document_detail/2959876.html
 """
-import asyncio
+import os
 import json
 import base64
-import websockets
-from typing import Optional
-import os
+import asyncio
+import threading
+import websocket as ws_client
+from typing import Optional, Callable
 
 
 class STTService:
-    """Alibaba Cloud paraformer-realtime STT service via WebSocket"""
+    """Alibaba Cloud Qwen3-ASR-Flash-Realtime STT service"""
     
     def __init__(self, api_key: str, ws_url: str = None):
         self.api_key = api_key
         self.ws_url = ws_url or os.getenv("BAILIAN_ASR_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/realtime")
-        self.model = os.getenv("BAILIAN_STT_MODEL", "paraformer-realtime")
+        self.model = os.getenv("BAILIAN_STT_MODEL", "Qwen3-ASR-Flash-Realtime-2026-02-10")
         
     async def transcribe(self, audio_data: str) -> Optional[str]:
-        """Transcribe audio data to text via WebSocket
+        """Transcribe audio data to text
         
         Args:
             audio_data: Base64 encoded audio data
@@ -29,61 +31,114 @@ class STTService:
         if not audio_data:
             return None
             
-        try:
-            # Build WebSocket URL - auth via header
-            async with websockets.connect(
-                self.ws_url,
-                additional_headers={"Authorization": f"Bearer {self.api_key}"}
-            ) as ws:
-                # Send start task message
-                start_msg = {
-                    "model": self.model,
-                    "task": "asr",
-                    "input": {
-                        "format": "wav",
-                        "rate": 16000,
-                        "channels": 1
+        # Run in thread since websocket-client is synchronous
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._transcribe_sync, audio_data)
+    
+    def _transcribe_sync(self, audio_data: str) -> Optional[str]:
+        """Synchronous transcription using websocket-client"""
+        result_queue = asyncio.Queue()
+        
+        def on_message(ws, message):
+            try:
+                data = json.loads(message)
+                print(f"STT received: {json.dumps(data, ensure_ascii=False)[:200]}")
+                
+                # Check for transcription result
+                if data.get("type") == "response.audio_transcript.done":
+                    transcript = data.get("transcript", {}).get("text", "")
+                    result_queue.put(transcript)
+                elif "transcript" in data:
+                    transcript = data.get("transcript", {}).get("text", "")
+                    if transcript:
+                        result_queue.put(transcript)
+            except Exception as e:
+                print(f"STT parse error: {e}")
+        
+        def on_error(ws, error):
+            print(f"STT WebSocket error: {error}")
+            result_queue.put(None)
+        
+        def on_close(ws, close_status_code, close_msg):
+            print(f"STT closed: {close_status_code} - {close_msg}")
+        
+        def on_open(ws):
+            print("STT WebSocket opened")
+            
+            # Send session update with VAD
+            session_event = {
+                "event_id": "event_session_001",
+                "type": "session.update",
+                "session": {
+                    "modalities": ["text"],
+                    "input_audio_format": "pcm",
+                    "sample_rate": 16000,
+                    "input_audio_transcription": {
+                        "language": "zh"
                     },
-                    "parameters": {
-                        "language_hints": ["zh", "en"]
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.2,
+                        "silence_duration_ms": 800
                     }
                 }
-                await ws.send(json.dumps(start_msg))
-                
-                # Decode and send audio
+            }
+            ws.send(json.dumps(session_event))
+            
+            # Send audio data
+            try:
                 audio_bytes = base64.b64decode(audio_data)
                 
-                # Send audio in chunks
-                chunk_size = 3200  # 100ms at 16kHz
+                # Send in chunks (3200 bytes = 100ms at 16kHz)
+                chunk_size = 3200
                 for i in range(0, len(audio_bytes), chunk_size):
                     chunk = audio_bytes[i:i+chunk_size]
-                    audio_msg = {
-                        "task": "asr",
-                        "input": {
-                            "audio": base64.b64encode(chunk).decode()
-                        }
+                    encoded = base64.b64encode(chunk).decode('utf-8')
+                    
+                    audio_event = {
+                        "event_id": f"event_audio_{i}",
+                        "type": "input_audio_buffer.append",
+                        "audio": encoded
                     }
-                    await ws.send(json.dumps(audio_msg))
-                    await asyncio.sleep(0.1)
+                    ws.send(json.dumps(audio_event))
                 
-                # Send stop message
-                stop_msg = {
-                    "task": "asr",
-                    "input": {}
+                # Commit the audio buffer
+                commit_event = {
+                    "event_id": "event_commit_001",
+                    "type": "input_audio_buffer.commit"
                 }
-                await ws.send(json.dumps(stop_msg))
+                ws.send(json.dumps(commit_event))
                 
-                # Receive transcription result
-                async for msg in ws:
-                    data = json.loads(msg)
-                    if data.get("type") == "result":
-                        if "output" in data and "text" in data["output"]:
-                            return data["output"]["text"]
-                    elif data.get("type") == "done":
-                        break
-                        
-        except Exception as e:
-            print(f"STT WebSocket error: {e}")
-            return None
+            except Exception as e:
+                print(f"STT send error: {e}")
         
-        return None
+        # Create WebSocket app
+        url = f"{self.ws_url}?model={self.model}"
+        ws = ws_client.WebSocketApp(
+            url,
+            header=[
+                f"Authorization: Bearer {self.api_key}",
+                "OpenAI-Beta: realtime=v1"
+            ],
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close
+        )
+        
+        # Run in background thread
+        def run_ws():
+            ws.run_forever()
+        
+        thread = threading.Thread(target=run_ws, daemon=True)
+        thread.start()
+        
+        # Wait for result with timeout
+        try:
+            result = result_queue.get(timeout=30)
+            ws.close()
+            return result
+        except asyncio.queues.Empty:
+            print("STT timeout")
+            ws.close()
+            return None
