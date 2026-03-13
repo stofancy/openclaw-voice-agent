@@ -1,6 +1,7 @@
 import sys
 import os
 import pytest
+import asyncio
 from unittest.mock import Mock, AsyncMock, MagicMock
 from wsl2.agent_gateway import AgentGateway
 from dependency_injector import containers, providers
@@ -79,37 +80,29 @@ def gateway_module():
 @pytest.fixture(autouse=True)
 def cleanup_event_loop():
     """清理事件循环，防止污染"""
-    yield
-    import asyncio
-    # 清理所有 pending tasks
     try:
+        # 检查当前是否有事件循环
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果事件循环正在运行，不要尝试清理
+            yield
+            return
+    except RuntimeError:
+        # 没有事件循环，直接返回
+        yield
+        return
+    
+    # 有事件循环但未运行，进行清理
+    yield
+    
+    # 清理所有待处理的任务
+    try:
         pending = asyncio.all_tasks(loop)
         for task in pending:
             task.cancel()
-    except Exception:
+        # 运行一次事件循环以完成取消操作
+        if not loop.is_closed():
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    except (RuntimeError, ValueError):
+        # 如果事件循环已经关闭或出现问题，忽略错误
         pass
-
-
-@pytest.fixture(scope="session")
-def browser_type_launch_args():
-    """Playwright 浏览器启动参数"""
-    return {
-        "headless": True,
-        "args": [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--autoplay-policy=no-user-gesture-required'
-        ]
-    }
-
-
-@pytest.fixture(scope="session")
-def playwright_config():
-    """Playwright 全局配置"""
-    return {
-        "timeout": 30000,  # 30秒超时
-        "action_timeout": 30000,
-        "navigation_timeout": 30000
-    }

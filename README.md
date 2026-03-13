@@ -29,21 +29,15 @@ cd ~/workspaces/audio-proxy
 
 ### 3. 打开浏览器
 
-- SDK 演示：http://localhost:8080/test-pages/sdk-demo.html
-- 实时通话：http://localhost:8080/test-pages/realtime-call.html
+- 前端应用：http://localhost:8080/
 
 ## 项目结构
 
 ```
 audio-proxy/
-├── sdk/                      # JavaScript SDK
-│   └── voice-gateway.js      # 浏览器端 SDK
+├── frontend/                 # React 前端应用
 ├── wsl2/                     # 网关代码
 │   └── agent-gateway.py      # Python 语音网关
-├── test-pages/               # 测试页面
-│   ├── sdk-demo.html         # SDK 演示
-│   ├── realtime-call.html    # 实时通话
-│   └── simple-test.html      # 简单测试
 ├── docs/                     # 文档
 └── logs/                     # 日志目录
 ```
