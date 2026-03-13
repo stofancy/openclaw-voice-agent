@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import pytest
 """
 TTS 播放调试测试 - 使用 Playwright 自动测试并捕获 Console 日志
 """
@@ -20,6 +21,7 @@ class Colors:
 # 存储 Console 日志
 console_logs = []
 
+@pytest.mark.asyncio
 async def test_tts_playback():
     """测试 TTS 播放完整流程"""
     print(f"\n{Colors.BLUE}{'='*80}{Colors.END}")
@@ -65,7 +67,7 @@ async def test_tts_playback():
         # 导航到页面
         print(f"\n{Colors.BLUE}[步骤 1] 打开页面...{Colors.END}")
         try:
-            await page.goto("http://localhost:8080/test-pages/pro-call.html", wait_until='networkidle')
+            await page.goto("http://localhost:5173/", wait_until='networkidle')
             await page.wait_for_selector('#btnCall')
             print(f"{Colors.GREEN}✅ 页面加载成功{Colors.END}")
         except Exception as e:

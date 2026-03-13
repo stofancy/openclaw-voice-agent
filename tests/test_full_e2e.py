@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import pytest
 """
 完整端到端测试：模拟真实使用场景
 文字 → TTS → 前端播放
@@ -9,6 +10,7 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 
+@pytest.mark.asyncio
 async def test_full_e2e():
     """完整端到端测试"""
     print("="*80)
@@ -45,7 +47,7 @@ async def test_full_e2e():
         
         # 打开页面
         print("\n[1] 打开页面...")
-        await page.goto("http://localhost:8080/test-pages/pro-call.html", wait_until='networkidle')
+        await page.goto("http://localhost:5173/", wait_until='networkidle')
         print("✅ 页面加载成功")
         
         # 创建 gateway

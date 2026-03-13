@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import pytest
 """
 简单 TTS 测试 - 直接播放测试音频
 """
@@ -8,6 +9,7 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 
+@pytest.mark.asyncio
 async def test_simple_tts():
     """简单 TTS 测试"""
     print("="*80)
@@ -15,20 +17,27 @@ async def test_simple_tts():
     print("="*80)
     
     async with async_playwright() as p:
-        # 连接到已有 Chrome
+        # 尝试连接到已有 Chrome 浏览器
         try:
             browser = await p.chromium.connect_over_cdp("http://localhost:9222")
             print("✅ 连接到 Chrome")
         except Exception as e:
             print(f"⚠️  无法连接，启动新浏览器：{e}")
             browser = await p.chromium.launch(
-                headless=False,
-                args=['--no-sandbox', '--disable-setuid-sandbox', '--remote-debugging-port=9222']
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--autoplay-policy=no-user-gesture-required',
+                    '--remote-debugging-port=9222'
+                ]
             )
             print("✅ 启动 Chrome")
         
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
-        page = context.pages[0] if context.pages else await context.new_page()
+        pages = context.pages
+        page = pages[0] if pages else await context.new_page()
         
         # 捕获 Console 日志
         all_logs = []
@@ -45,7 +54,7 @@ async def test_simple_tts():
         
         # 打开页面
         print("\n[1] 打开页面...")
-        await page.goto("http://localhost:8080/test-pages/pro-call.html")
+        await page.goto("http://localhost:5173/")
         await page.wait_for_selector('#btnCall')
         print("✅ 页面加载成功")
         

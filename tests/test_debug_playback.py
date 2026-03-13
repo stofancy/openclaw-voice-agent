@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import pytest
 """
 调试播放问题
 捕获所有日志和错误
@@ -9,6 +10,7 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 
+@pytest.mark.asyncio
 async def test_debug():
     """调试播放"""
     print("="*80)
@@ -16,9 +18,34 @@ async def test_debug():
     print("="*80)
     
     async with async_playwright() as p:
-        browser = await p.chromium.connect_over_cdp("http://localhost:9222")
-        context = browser.contexts[0]
-        page = context.pages[0]
+        # 尝试连接到已有 Chrome 浏览器
+        try:
+            browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+            print("✅ 连接到已有 Chrome 浏览器")
+        except Exception as e:
+            print(f"⚠️  无法连接到已有 Chrome: {e}")
+            print("   尝试启动新浏览器...")
+            
+            # 启动新浏览器（无头模式，适合CI环境）
+            try:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--autoplay-policy=no-user-gesture-required',
+                        '--remote-debugging-port=9222'
+                    ]
+                )
+                print("✅ 启动新 Chrome 浏览器成功")
+            except Exception as e2:
+                print(f"❌ 无法启动浏览器：{e2}")
+                return
+        
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        pages = context.pages
+        page = pages[0] if pages else await context.new_page()
         
         # 捕获所有日志
         all_logs = []
@@ -39,7 +66,7 @@ async def test_debug():
         
         # 打开页面
         print("\n[1] 打开页面...")
-        await page.goto("http://localhost:8080/test-pages/pro-call.html")
+        await page.goto("http://localhost:5173/")
         
         # 创建 gateway
         print("\n[2] 创建 gateway...")

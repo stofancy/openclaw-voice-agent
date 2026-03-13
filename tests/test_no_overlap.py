@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import pytest
 """
 测试 gateway 实例不叠加
 模拟多次创建 gateway，验证只有一个实例在工作
@@ -9,6 +10,7 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 
+@pytest.mark.asyncio
 async def test_no_overlap():
     """测试 gateway 不叠加"""
     print("="*80)
@@ -16,19 +18,27 @@ async def test_no_overlap():
     print("="*80)
     
     async with async_playwright() as p:
-        # 连接到已有 Chrome
+        # 尝试连接到已有 Chrome 浏览器
         try:
             browser = await p.chromium.connect_over_cdp("http://localhost:9222")
             print("✅ 连接到 Chrome")
-        except:
+        except Exception as e:
+            print(f"⚠️  无法连接，启动新浏览器：{e}")
             browser = await p.chromium.launch(
-                headless=False,
-                args=['--no-sandbox', '--disable-setuid-sandbox', '--remote-debugging-port=9222']
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--autoplay-policy=no-user-gesture-required',
+                    '--remote-debugging-port=9222'
+                ]
             )
             print("✅ 启动 Chrome")
         
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
-        page = context.pages[0] if context.pages else await context.new_page()
+        pages = context.pages
+        page = pages[0] if pages else await context.new_page()
         
         # 捕获 Console 日志
         all_logs = []
@@ -45,7 +55,7 @@ async def test_no_overlap():
         
         # 打开页面
         print("\n[1] 打开页面...")
-        await page.goto("http://localhost:8080/test-pages/pro-call.html", wait_until='networkidle')
+        await page.goto("http://localhost:5173/", wait_until='networkidle')
         print("✅ 页面加载成功")
         
         # 模拟多次创建 gateway

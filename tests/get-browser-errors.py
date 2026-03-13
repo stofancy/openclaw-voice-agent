@@ -25,7 +25,7 @@ async def get_errors():
         
         # 打开页面
         print("打开页面...")
-        await page.goto("http://localhost:8080/test-pages/pro-call.html", wait_until='networkidle')
+        await page.goto("http://localhost:5173/", wait_until='networkidle')
         
         # 等待 10 秒
         print("等待 10 秒收集错误...")

@@ -22,6 +22,9 @@ console_logs = []
 tts_audio_count = 0
 play_count = 0
 
+import pytest
+
+@pytest.mark.asyncio
 async def test_tts_no_overlap():
     """测试 TTS 播放不重叠"""
     global console_logs, tts_audio_count, play_count
@@ -46,10 +49,10 @@ async def test_tts_no_overlap():
             print(f"{Colors.YELLOW}⚠️  无法连接到已有 Chrome: {e}{Colors.END}")
             print(f"{Colors.YELLOW}   尝试启动新浏览器...{Colors.END}")
             
-            # 启动新浏览器（有头模式）
+            # 启动新浏览器（无头模式，适合CI环境）
             try:
                 browser = await p.chromium.launch(
-                    headless=False,
+                    headless=True,
                     args=[
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
@@ -98,7 +101,7 @@ async def test_tts_no_overlap():
         
         # 导航到页面
         print(f"\n{Colors.BLUE}[步骤 1] 打开页面...{Colors.END}")
-        await page.goto("http://localhost:8080/test-pages/pro-call.html", wait_until='networkidle')
+        await page.goto("http://localhost:5173/", wait_until='networkidle')
         await page.wait_for_selector('#btnCall')
         print(f"{Colors.GREEN}✅ 页面加载成功{Colors.END}")
         
