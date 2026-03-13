@@ -1,25 +1,25 @@
 """
-Text-to-Speech service using Alibaba Cloud qwen-tts
+Text-to-Speech service using Alibaba Cloud dashscope SDK
 """
-import aiohttp
-import base64
-import os
+import dashscope
+from dashscope.audio.tts import SpeechSynthesizer
 from typing import Optional
+import os
 
 
 class TTSService:
-    """Alibaba Cloud TTS service"""
+    """Alibaba Cloud TTS service using dashscope SDK"""
     
     def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.api_url = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/generation"
+        dashscope.api_key = api_key
+        self.model = "tts-199"
         
     async def synthesize(self, text: str, voice: str = "xiaoyun") -> Optional[str]:
         """Synthesize text to speech
         
         Args:
             text: Text to synthesize
-            voice: Voice name (default: xiaoyun)
+            voice: Voice name
             
         Returns:
             Base64 encoded audio data or None if failed
@@ -28,41 +28,28 @@ class TTSService:
             return None
             
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+            # Use synchronous call in async context
+            import asyncio
+            loop = asyncio.get_event_loop()
             
-            payload = {
-                "model": "qwen-tts",
-                "input": {
-                    "text": text
-                },
-                "parameters": {
-                    "voice": voice,
-                    "format": "mp3",
-                    "sample_rate": 32000
-                }
-            }
+            result = await loop.run_in_executor(
+                None,
+                lambda: SpeechSynthesizer.call(
+                    model=self.model,
+                    text=text,
+                    format="mp3",
+                    sample_rate=32000,
+                    voice=voice
+                )
+            )
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.api_url, 
-                    headers=headers, 
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        # Parse the audio data from response
-                        if 'output' in result and 'audio' in result['output']:
-                            return result['output']['audio']
-                        elif 'data' in result:
-                            return result['data']
-                    else:
-                        print(f"TTS API error: {response.status}")
-                        return None
-                        
+            if result.get_audio_data():
+                import base64
+                return base64.b64encode(result.get_audio_data()).decode('utf-8')
+            else:
+                print(f"TTS result: {result}")
+                return None
+                
         except Exception as e:
             print(f"TTS error: {e}")
             return None
