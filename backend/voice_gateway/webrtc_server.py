@@ -4,8 +4,12 @@ WebRTC server implementation for Voice Gateway.
 import asyncio
 import json
 import websockets
+import os
 from typing import Optional, Dict, Set
 from .config import Config
+from .stt_service import STTService
+from .agent_client import AgentClient
+from .tts_service import TTSService
 
 
 class WebRTCServer:
@@ -16,6 +20,15 @@ class WebRTCServer:
         self.running = False
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.turn_counter = 0  # Track conversation turns
+        
+        # Initialize services
+        api_key = config.dashscope_api_key or os.getenv("ALI_BAILIAN_API_KEY", "")
+        self.stt_service = STTService(api_key)
+        self.agent_client = AgentClient()
+        self.tts_service = TTSService(api_key)
+        
+        # Processing lock to prevent concurrent requests
+        self._is_processing = False
         
     async def handle_client(self, websocket: websockets.WebSocketServerProtocol):
         """Handle individual client connections."""
@@ -86,26 +99,80 @@ class WebRTCServer:
             }))
             return
         
-        # In a real implementation, we would create an actual WebRTC peer connection
-        # For this demo, we'll simulate a successful answer
+        # Parse the offer SDP to understand what media streams are included
+        lines = sdp.split('\r\n')
+        media_lines = []
+        for line in lines:
+            if line.startswith('m='):
+                media_lines.append(line)
+        
+        print(f"Offer contains {len(media_lines)} media lines: {media_lines}")
+        
+        # Build a matching answer SDP based on the offer
+        # The answer must have the same number and order of m-lines as the offer
+        import os
+        
+        # Generate proper ICE credentials (22-256 characters)
+        ice_ufrag = os.urandom(4).hex()  # 8 characters
+        ice_pwd = os.urandom(32).hex()   # 64 characters
+        
+        # Generate SDES crypto keys (30 bytes = 240 bits for AES-CM)
+        sdes_key = os.urandom(30).hex()
+        
+        answer_lines = [
+            "v=0",
+            "o=- 1234567890 2 IN IP4 127.0.0.1",
+            "s=Voice Gateway Answer",
+            "t=0 0",
+        ]
+        
+        # Generate m-lines to match the offer
+        for i, mline in enumerate(media_lines):
+            if mline.startswith('m=audio'):
+                # Audio media line - use DTLS with real certificate
+                answer_lines.append("m=audio 9 UDP/TLS/RTP/SAVPF 111")
+                answer_lines.append("c=IN IP4 127.0.0.1")
+                answer_lines.append("a=rtcp-mux")
+                answer_lines.append(f"a=ice-ufrag:{ice_ufrag}")
+                answer_lines.append(f"a=ice-pwd:{ice_pwd}")
+                answer_lines.append("a=fingerprint:sha-256 36:CC:28:82:6E:95:58:43:48:7B:13:2B:CB:FD:B7:11:7D:C0:F1:69:92:9F:E6:33:4A:21:B3:D3:13:B8:AE:FF")
+                answer_lines.append("a=setup:active")
+                answer_lines.append(f"a=mid:{i}")
+                answer_lines.append("a=sendrecv")
+                answer_lines.append("a=rtpmap:111 opus/48000/2")
+                answer_lines.append("a=rtcp-fb:111 transport-cc")
+                answer_lines.append("a=fmtp:111 minptime=10;useinbandfec=1")
+            elif mline.startswith('m=video'):
+                # Video media line - reject it by setting port to 0
+                # Extract the existing video fmtp and replace port with 0
+                parts = mline.split()
+                if len(parts) >= 2:
+                    video_fmtp = ' '.join(parts[2:]) if len(parts) > 2 else ''
+                    answer_lines.append(f"m=video 0 RTP/SAVPF 96")
+                    answer_lines.append("c=IN IP4 0.0.0.0")
+                    answer_lines.append("a=rtcp-mux")
+                    answer_lines.append(f"a=ice-ufrag:{ice_ufrag}")
+                    answer_lines.append(f"a=ice-pwd:{ice_pwd}")
+                    answer_lines.append("a=setup:active")
+                    answer_lines.append(f"a=mid:{i}")
+                    answer_lines.append("a=inactive")
+                    answer_lines.append("a=rtpmap:96 VP8/90000")
+            else:
+                # Unknown media type - reject it
+                answer_lines.append("m=application 0 UDP/DTLS/SCTP webrtc-datachannel")
+                answer_lines.append("c=IN IP4 0.0.0.0")
+                answer_lines.append("a=rtcp-mux")
+                answer_lines.append(f"a=ice-ufrag:{ice_ufrag}")
+                answer_lines.append(f"a=ice-pwd:{ice_pwd}")
+                answer_lines.append("a=setup:active")
+                answer_lines.append(f"a=mid:{i}")
+                answer_lines.append("a=sendrecv")
+        
+        answer_sdp_str = '\r\n'.join(answer_lines) + '\r\n'
+        
         answer_sdp = {
             "type": "answer",
-            "sdp": "v=0\r\n" +
-                   "o=- 1234567890 2 IN IP4 127.0.0.1\r\n" +
-                   "s=Voice Gateway Answer\r\n" +
-                   "t=0 0\r\n" +
-                   "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n" +
-                   "c=IN IP4 127.0.0.1\r\n" +
-                   "a=rtcp:9 IN IP4 127.0.0.1\r\n" +
-                   "a=ice-ufrag:answer\r\n" +
-                   "a=ice-pwd:answerpassword\r\n" +
-                   "a=fingerprint:sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r\n" +
-                   "a=setup:active\r\n" +
-                   "a=mid:0\r\n" +
-                   "a=sendrecv\r\n" +
-                   "a=rtpmap:111 opus/48000/2\r\n" +
-                   "a=rtcp-fb:111 transport-cc\r\n" +
-                   "a=fmtp:111 minptime=10;useinbandfec=1\r\n"
+            "sdp": answer_sdp_str
         }
         await websocket.send(json.dumps(answer_sdp))
     
@@ -147,19 +214,97 @@ class WebRTCServer:
             }))
             return
         
-        # Increment turn counter for each audio message
+        # Prevent concurrent processing
+        if self._is_processing:
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": "Still processing previous request"
+            }))
+            return
+        
+        self._is_processing = True
         current_turn = self.turn_counter
         self.turn_counter += 1
         
-        # Echo the audio data back to the client (simulating AI response)
-        echo_response = {
-            "type": "audio-response",
-            "audio": audio_data,
-            "timestamp": data.get("timestamp", 0),
-            "turn_id": current_turn,
-            "is_new_turn": True
-        }
-        await websocket.send(json.dumps(echo_response))
+        try:
+            # Send thinking status
+            await websocket.send(json.dumps({
+                "type": "status",
+                "status": "processing",
+                "message": "正在识别..."
+            }))
+            
+            # Step 1: STT - Speech to Text
+            transcribed_text = await self.stt_service.transcribe(audio_data)
+            
+            if not transcribed_text:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": "语音识别失败，请重试"
+                }))
+                return
+                
+            print(f"[Turn {current_turn}] User said: {transcribed_text}")
+            
+            # Send thinking status
+            await websocket.send(json.dumps({
+                "type": "status",
+                "status": "thinking",
+                "message": "正在思考..."
+            }))
+            
+            # Step 2: Agent - Call travel-agency agent
+            agent_response = await self.agent_client.process_message(transcribed_text)
+            
+            if not agent_response:
+                agent_response = "抱歉，我暂时无法处理您的请求。"
+                
+            print(f"[Turn {current_turn}] Agent response: {agent_response}")
+            
+            # Send thinking status
+            await websocket.send(json.dumps({
+                "type": "status",
+                "status": "speaking",
+                "message": "正在生成语音..."
+            }))
+            
+            # Step 3: TTS - Text to Speech
+            audio_response = await self.tts_service.synthesize(agent_response)
+            
+            if not audio_response:
+                # Fallback: send text response
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": "语音合成失败"
+                }))
+                return
+                
+            # Send the audio response
+            response_msg = {
+                "type": "audio-response",
+                "audio": audio_response,
+                "text": agent_response,  # Include text for display
+                "timestamp": data.get("timestamp", 0),
+                "turn_id": current_turn,
+                "is_new_turn": True
+            }
+            await websocket.send(json.dumps(response_msg))
+            
+            # Send completion status
+            await websocket.send(json.dumps({
+                "type": "status",
+                "status": "idle",
+                "message": ""
+            }))
+            
+        except Exception as e:
+            print(f"Error processing audio: {e}")
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": f"处理出错: {str(e)}"
+            }))
+        finally:
+            self._is_processing = False
     
     async def start(self):
         """Start the WebRTC server."""

@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import { useWebRTC } from './hooks/useWebRTC';
 import { VoiceConnectionStatus } from './components/VoiceConnectionStatus';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
+import { AudioVolumeIndicator } from './components/AudioVolumeIndicator';
+
+type ConversationStatus = 'idle' | 'recording' | 'thinking' | 'playing';
 
 function App() {
-  const [webRTCState, webRTCActions] = useWebRTC('ws://localhost:8765');
+  const [webRTCState, webRTCActions] = useWebRTC('ws://localhost:8080');
   const {
     isRecording,
     hasPermission,
@@ -17,23 +20,21 @@ function App() {
     mediaStream
   } = useAudioRecorder();
   
-  const {
-    isPlaying,
-    playStatus,
-    error: playerError,
-    playAudio,
-    stopAudio
-  } = useAudioPlayer();
+  const [playerState, playerActions] = useAudioPlayer();
+  const { status: playerStatus, error: playerError } = playerState;
   
-  const [playbackStatus, setPlaybackStatus] = useState<'idle' | 'playing' | 'completed' | 'error'>('idle');
-  const [conversationActive, setConversationActive] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const [conversationStatus, setConversationStatus] = useState<ConversationStatus>('idle');
   
   const handleRetry = () => {
     webRTCActions.connect();
   };
+
+  // Auto-request microphone permission when connected
+  useEffect(() => {
+    if (webRTCState.isConnected && hasPermission === null) {
+      requestPermission();
+    }
+  }, [webRTCState.isConnected, hasPermission, requestPermission]);
 
   const handleStartRecording = async () => {
     if (hasPermission === null) {
@@ -41,67 +42,83 @@ function App() {
     }
     if (hasPermission) {
       startRecording();
-      setConversationActive(true);
+      setConversationStatus('recording');
+    }
+  };
+
+  const handleStopRecording = async () => {
+    const audioBlob = await stopRecording();
+    setConversationStatus('thinking');
+    
+    // Send audio to backend if we have a recording
+    if (audioBlob && webRTCState.isConnected) {
+      try {
+        // Convert blob to base64
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        
+        // Send via WebRTC data channel
+        webRTCActions.sendAudioData(base64, 'webm');
+      } catch (err) {
+        console.error('Failed to send audio:', err);
+      }
     }
   };
 
   // Handle audio playback status changes
   useEffect(() => {
-    if (isPlaying) {
-      setPlaybackStatus('playing');
-    } else if (playStatus === 'completed') {
-      setPlaybackStatus('completed');
-      // US-06: AI 播放完成后自动准备下一轮录音
-      if (conversationActive) {
-        // Automatically prepare for next round of recording
-        setTimeout(() => {
-          if (hasPermission && !isRecording) {
-            startRecording();
-          }
-        }, 500); // Small delay to ensure smooth transition
-      }
+    if (playerStatus === 'playing') {
+      setConversationStatus('playing');
+    } else if (playerStatus === 'idle') {
+      setConversationStatus('idle');
     } else if (playerError) {
-      setPlaybackStatus('error');
+      setConversationStatus('idle');
     }
-  }, [isPlaying, playStatus, playerError, conversationActive, hasPermission, isRecording, startRecording]);
+  }, [playerStatus, playerError]);
 
-  // Handle WebRTC messages
+  // Set up listener for AI audio responses
   useEffect(() => {
-    if (!webRTCState.isConnected || !mediaStream) {
-      return;
-    }
-
-    const handleAudioData = async (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'audio-response') {
-          // Convert base64 audio data to ArrayBuffer
-          const binaryString = atob(data.audio);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          const audioBlob = new Blob([bytes], { type: 'audio/opus' });
-          await playAudio(audioBlob);
-        }
-      } catch (error) {
-        console.error('Error handling audio response:', error);
-      }
-    };
-
-    // This would need to be connected to the actual WebSocket
-    // For now, we'll simulate the connection through the existing hooks
+    if (!webRTCState.isConnected) return;
     
-  }, [webRTCState.isConnected, mediaStream, playAudio]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
+    // Use the onAiResponse callback from useWebRTC
+    webRTCActions.onAiResponse(async (audioData: string, _turnId: number) => {
+      try {
+        // Convert base64 to audio blob
+        const binaryString = atob(audioData);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const audioBlob = new Blob([bytes], { type: 'audio/webm' });
+        
+        // Play the audio
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        await playerActions.playAudio(arrayBuffer);
+      } catch (err) {
+        console.error('Error playing AI response:', err);
+        setConversationStatus('idle');
       }
-    };
-  }, []);
+    });
+    
+    webRTCActions.onAiFinished(() => {
+      setConversationStatus('idle');
+    });
+  }, [webRTCState.isConnected, webRTCActions, playerActions]);
+
+  const getConversationStatusText = () => {
+    switch (conversationStatus) {
+      case 'idle':
+        return '等待中';
+      case 'recording':
+        return '正在录音...';
+      case 'thinking':
+        return '正在思考...';
+      case 'playing':
+        return '正在播放...';
+      default:
+        return '等待中';
+    }
+  };
 
   return (
     <div className="App">
@@ -127,36 +144,28 @@ function App() {
           )}
           {hasPermission && (
             <button 
-              onClick={isRecording ? stopRecording : handleStartRecording}
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
               className={`recording-button ${isRecording ? 'recording' : ''}`}
             >
               {isRecording ? '停止录音' : '开始录音'}
             </button>
           )}
-          {isRecording && <div className="recording-indicator">● 录音中...</div>}
         </div>
 
-        {/* Playback Status */}
-        <div className="playback-status">
-          {playbackStatus === 'playing' && (
-            <div className="playing-indicator">正在播放...</div>
-          )}
-          {playbackStatus === 'completed' && (
-            <div className="completed-indicator">等待中</div>
-          )}
-          {playbackStatus === 'error' && (
-            <div className="error-message">播放失败: {playerError}</div>
-          )}
-          {playbackStatus === 'idle' && (
-            <div className="idle-indicator">等待中</div>
+        {/* Conversation Status */}
+        <div className="conversation-status">
+          <div className="status-text">{getConversationStatusText()}</div>
+          {conversationStatus === 'recording' && (
+            <AudioVolumeIndicator 
+              mediaStream={mediaStream} 
+              isRecording={isRecording} 
+            />
           )}
         </div>
         
-        {/* Conversation Status */}
-        {conversationActive && (
-          <div className="conversation-status">
-            多轮对话进行中...
-          </div>
+        {/* Playback Error */}
+        {playerError && (
+          <div className="error-message">播放失败: {playerError}</div>
         )}
       </header>
     </div>

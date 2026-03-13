@@ -97,6 +97,13 @@
   margin-top: 10px;
 }
 
+.thinking-indicator {
+  color: #f0ad4e;
+  font-weight: bold;
+  font-size: 18px;
+  margin: 10px 0;
+}
+
 .playback-status {
   margin: 20px 0;
 }
@@ -119,4 +126,63 @@
   padding: 10px;
   border-radius: 5px;
   margin: 10px 0;
+}
+
+/* Audio Volume Indicator Styles */
+.volume-container {
+  margin: 20px 0;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  min-height: 40px;
+}
+
+.volume-label {
+  color: #fff;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.volume-bar {
+  height: 20px;
+  background-color: #444;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.1s ease;
+}
+
+.volume-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5cb85c, #5bc0de);
+  width: 0%;
+  border-radius: 10px;
+  transition: width 0.1s ease;
+}
+
+.volume-waveform {
+  height: 40px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 10px;
+}
+
+.volume-bar-hidden {
+  display: none;
+}
+
+.volume-waveform-bar {
+  width: 4px;
+  background: linear-gradient(to top, #5cb85c, #5bc0de);
+  border-radius: 2px 2px 0 0;
+  transition: height 0.1s ease;
+  min-height: 2px;
+}
+
+/* Conversation status */
+.conversation-status {
+  color: #5bc0de;
+  font-style: italic;
+  margin-top: 10px;
 }

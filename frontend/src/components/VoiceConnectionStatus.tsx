@@ -13,6 +13,15 @@ export const VoiceConnectionStatus: React.FC<VoiceConnectionStatusProps> = ({
   error,
   onRetry
 }) => {
+  // 初始状态：既没有连接也没有正在连接，且没有错误
+  if (!isConnected && !isConnecting && !error) {
+    return (
+      <div className="connection-status waiting">
+        等待连接
+      </div>
+    );
+  }
+  
   if (isConnecting) {
     return (
       <div className="connection-status connecting">
