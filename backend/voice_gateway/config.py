@@ -17,4 +17,4 @@ class Config:
         self.stt_service_url = stt_service_url if stt_service_url is not None else os.getenv("STT_SERVICE_URL", "http://localhost:8081")
         self.tts_service_url = tts_service_url if tts_service_url is not None else os.getenv("TTS_SERVICE_URL", "http://localhost:8082")
         self.agent_service_url = agent_service_url if agent_service_url is not None else os.getenv("AGENT_SERVICE_URL", "http://localhost:8083")
-        self.dashscope_api_key = DASHSCOPE_API_KEY if DASHSCOPE_API_KEY is not None else os.getenv("DASHSCOPE_API_KEY", "")
+        self.dashscope_api_key = DASHSCOPE_API_KEY if DASHSCOPE_API_KEY is not None else os.getenv("DASHSCOPE_API_KEY", os.getenv("ALI_BAILIAN_API_KEY", ""))
