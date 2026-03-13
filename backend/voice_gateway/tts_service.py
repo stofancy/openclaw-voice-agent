@@ -3,6 +3,7 @@ Text-to-Speech service using Alibaba Cloud Qwen3-TTS-Flash-Realtime
 Based on official example
 """
 import os
+import asyncio
 import base64
 import time
 import dashscope
@@ -97,7 +98,7 @@ class TTSService:
             # Update session
             tts.update_session(
                 voice=voice,
-                response_format=AudioFormat.MP3_32000HZ_MONO_16BIT,
+                response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
                 mode='server_commit'
             )
             
