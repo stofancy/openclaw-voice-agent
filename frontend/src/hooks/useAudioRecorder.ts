@@ -42,10 +42,18 @@ export function useAudioRecorder() {
     // Reset audio chunks
     audioChunksRef.current = [];
     
-    // Create MediaRecorder
+    // Create MediaRecorder with PCM format for STT compatibility
     if (mediaStream) {
+      // Try to use PCM format, fallback to webm
+      let mimeType = 'audio/webm;codecs=opus';
+      if (MediaRecorder.isTypeSupported('audio/wav')) {
+        mimeType = 'audio/wav';
+      } else if (MediaRecorder.isTypeSupported('audio/pcm')) {
+        mimeType = 'audio/pcm';
+      }
+      
       const mediaRecorder = new MediaRecorder(mediaStream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType
       });
       
       mediaRecorder.ondataavailable = (event) => {
