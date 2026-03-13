@@ -37,6 +37,11 @@ class AgentClient:
                 # Parse JSON output
                 try:
                     response_data = json.loads(result.stdout)
+                    # Try different response formats
+                    if 'result' in response_data:
+                        payloads = response_data['result'].get('payloads', [])
+                        if payloads and 'text' in payloads[0]:
+                            return payloads[0]['text']
                     if 'response' in response_data:
                         return response_data['response']
                     elif 'message' in response_data:
