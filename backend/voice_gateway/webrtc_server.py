@@ -25,7 +25,7 @@ class WebRTCServer:
         api_key = config.bailian_api_key
         self.stt_service = STTService(api_key, config.bailian_asr_url)
         self.agent_client = AgentClient()
-        self.tts_service = TTSService(api_key, config.bailian_tts_url)
+        self.tts_service = TTSService(api_key)
         
         # Processing lock to prevent concurrent requests
         self._is_processing = False
