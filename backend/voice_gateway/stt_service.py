@@ -8,7 +8,7 @@ import base64
 import asyncio
 import threading
 import websocket as ws_client
-from typing import Optional, Callable
+from typing import Optional
 
 
 class STTService:
@@ -17,7 +17,7 @@ class STTService:
     def __init__(self, api_key: str, ws_url: str = None):
         self.api_key = api_key
         self.ws_url = ws_url or os.getenv("BAILIAN_ASR_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/realtime")
-        self.model = os.getenv("BAILIAN_STT_MODEL", "Qwen3-ASR-Flash-Realtime-2026-02-10")
+        self.model = os.getenv("BAILIAN_STT_MODEL", "qwen3-asr-flash-realtime-2026-02-10")
         
     async def transcribe(self, audio_data: str) -> Optional[str]:
         """Transcribe audio data to text
@@ -37,28 +37,32 @@ class STTService:
     
     def _transcribe_sync(self, audio_data: str) -> Optional[str]:
         """Synchronous transcription using websocket-client"""
-        import queue
-        result_queue = queue.Queue()
+        from queue import Queue
+        result_queue = Queue()
         
         def on_message(ws, message):
             try:
                 data = json.loads(message)
-                print(f"STT received: {json.dumps(data, ensure_ascii=False)[:200]}")
+                event_type = data.get("type", "")
+                print(f"STT received: {event_type}")
                 
-                # Check for transcription result
-                if data.get("type") == "response.audio_transcript.done":
-                    transcript = data.get("transcript", {}).get("text", "")
-                    result_queue.put(transcript)
-                elif "transcript" in data:
+                # Check for transcription result in conversation.item events
+                if event_type == "conversation.item.input_audio_transcription.text":
+                    transcript = data.get("transcript", "")
+                    if transcript:
+                        result_queue.put(transcript)
+                        
+                # Also check for done event
+                elif event_type == "response.audio_transcript.done":
                     transcript = data.get("transcript", {}).get("text", "")
                     if transcript:
                         result_queue.put(transcript)
+                        
             except Exception as e:
                 print(f"STT parse error: {e}")
         
         def on_error(ws, error):
             print(f"STT WebSocket error: {error}")
-            result_queue.put(None)
         
         def on_close(ws, close_status_code, close_msg):
             print(f"STT closed: {close_status_code} - {close_msg}")
@@ -139,7 +143,7 @@ class STTService:
             result = result_queue.get(timeout=30)
             ws.close()
             return result
-        except queue.Empty:
+        except:
             print("STT timeout")
             ws.close()
             return None

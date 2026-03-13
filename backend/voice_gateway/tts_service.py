@@ -7,7 +7,7 @@ import asyncio
 import base64
 import time
 import dashscope
-from dashscope.audio.qwen_tts_realtime import QwenTtsRealtime, QwenTtsRealtimeCallback
+from dashscope.audio.qwen_tts_realtime import QwenTtsRealtime, QwenTtsRealtimeCallback, AudioFormat
 from typing import Optional
 import threading
 
@@ -56,7 +56,7 @@ class TTSService:
     
     def __init__(self, api_key: str):
         dashscope.api_key = api_key
-        self.model = os.getenv("BAILIAN_TTS_MODEL", "Qwen3-TTS-Flash-Realtime")
+        self.model = os.getenv("BAILIAN_TTS_MODEL", "qwen3-tts-flash-realtime")
         
     async def synthesize(self, text: str, voice: str = "Cherry") -> Optional[str]:
         """Synthesize text to speech
@@ -82,8 +82,6 @@ class TTSService:
     
     def _synthesize_sync(self, text: str, voice: str) -> Optional[str]:
         """Synchronous TTS synthesis"""
-        from dashscope.audio.qwen_tts_realtime import AudioFormat
-        
         callback = TTSCallback()
         
         tts = QwenTtsRealtime(
