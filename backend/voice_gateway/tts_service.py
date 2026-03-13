@@ -31,12 +31,13 @@ class TTSService:
             return None
             
         try:
-            # Build WebSocket URL with API key as query param
-            ws_url_with_auth = f"{self.ws_url}?api-key={self.api_key}"
-            
+            # Build WebSocket URL - auth via header
             audio_chunks = []
             
-            async with websockets.connect(ws_url_with_auth) as ws:
+            async with websockets.connect(
+                self.ws_url,
+                additional_headers={"Authorization": f"Bearer {self.api_key}"}
+            ) as ws:
                 # Send start task message
                 start_msg = {
                     "model": self.model,

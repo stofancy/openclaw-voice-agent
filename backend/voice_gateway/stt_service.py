@@ -30,10 +30,11 @@ class STTService:
             return None
             
         try:
-            # Build WebSocket URL with API key as query param
-            ws_url_with_auth = f"{self.ws_url}?api-key={self.api_key}"
-            
-            async with websockets.connect(ws_url_with_auth) as ws:
+            # Build WebSocket URL - auth via header
+            async with websockets.connect(
+                self.ws_url,
+                additional_headers={"Authorization": f"Bearer {self.api_key}"}
+            ) as ws:
                 # Send start task message
                 start_msg = {
                     "model": self.model,
