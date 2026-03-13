@@ -1,32 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
 
-// Web Speech API types
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: (event: SpeechRecognitionEvent) => void;
-  onerror: (event: SpeechRecognitionErrorEvent) => void;
-  start: () => void;
-  stop: () => void;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
-  }
-}
-
 export function useAudioRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -35,10 +8,6 @@ export function useAudioRecorder() {
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  
-  // Web Speech API for STT
-  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
-  const [transcribedText, setTranscribedText] = useState<string>('');
 
   const requestPermission = useCallback(async () => {
     try {
@@ -70,9 +39,8 @@ export function useAudioRecorder() {
       if (!granted) return;
     }
     
-    // Reset audio chunks and transcribed text
+    // Reset audio chunks
     audioChunksRef.current = [];
-    setTranscribedText('');
     
     // Create MediaRecorder
     if (mediaStream) {
@@ -90,54 +58,13 @@ export function useAudioRecorder() {
       mediaRecorder.start(100); // Collect data every 100ms
     }
     
-    // Start Web Speech API for real-time transcription
-    const SpeechRecognitionAPI = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognitionAPI) {
-      const recognition = new SpeechRecognitionAPI();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'zh-CN';
-      
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
-        
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-        
-        if (finalTranscript) {
-          setTranscribedText(prev => prev + finalTranscript);
-        }
-      };
-      
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.log('Speech recognition error:', event.error);
-        // Continue recording even if speech recognition fails - we'll send audio data
-      };
-      
-      recognition.start();
-      speechRecognitionRef.current = recognition;
-    }
-    
     setIsRecording(true);
   }, [requestPermission, mediaStream]);
 
-  const stopRecording = useCallback((): Promise<{ audioBlob: Blob | null; text: string }> => {
+  const stopRecording = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
-      // Stop speech recognition
-      if (speechRecognitionRef.current) {
-        speechRecognitionRef.current.stop();
-        speechRecognitionRef.current = null;
-      }
-      
       if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-        resolve({ audioBlob: null, text: transcribedText });
+        resolve(null);
         return;
       }
       
@@ -145,13 +72,16 @@ export function useAudioRecorder() {
         // Create audio blob from chunks
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
-        // Return both audio and transcribed text
-        resolve({ audioBlob, text: transcribedText });
+        // Note: Do NOT stop the audio tracks - they can be reused for next recording
+        // Only stop the MediaRecorder
+        
+        setIsRecording(false);
+        resolve(audioBlob);
       };
       
       mediaRecorderRef.current.stop();
     });
-  }, [transcribedText]);
+  }, []);
 
   return {
     isRecording,
@@ -161,7 +91,6 @@ export function useAudioRecorder() {
     openSettings,
     startRecording,
     stopRecording,
-    mediaStream,
-    transcribedText
+    mediaStream
   };
 }
