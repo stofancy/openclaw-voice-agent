@@ -37,7 +37,8 @@ class STTService:
     
     def _transcribe_sync(self, audio_data: str) -> Optional[str]:
         """Synchronous transcription using websocket-client"""
-        result_queue = asyncio.Queue()
+        import queue
+        result_queue = queue.Queue()
         
         def on_message(ws, message):
             try:
@@ -138,7 +139,7 @@ class STTService:
             result = result_queue.get(timeout=30)
             ws.close()
             return result
-        except asyncio.queues.Empty:
+        except queue.Empty:
             print("STT timeout")
             ws.close()
             return None
