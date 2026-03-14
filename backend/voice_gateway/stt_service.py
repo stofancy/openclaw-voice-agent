@@ -90,6 +90,7 @@ class STTService:
         """Synchronous transcription using websocket-client"""
         from queue import Queue
         result_queue = Queue()
+        transcript_parts = []  # 使用列表收集转录片段
         
         def on_message(ws, message):
             try:
@@ -97,17 +98,26 @@ class STTService:
                 event_type = data.get("type", "")
                 print(f"STT received: {event_type}")
                 
-                # Check for transcription result
+                # Check for transcription result - collect all text events
                 if event_type == "conversation.item.input_audio_transcription.completed":
-                    transcript = data.get("transcript", "")
-                    if transcript:
-                        print(f"STT got transcript: {transcript}")
-                        result_queue.put(transcript)
+                    # 文字可能在 transcript 或 stash 字段
+                    transcript = (data.get("transcript", "") or 
+                                 data.get("stash", "") or
+                                 data.get("text", ""))
+                    if transcript and transcript.strip():
+                        print(f"STT got completed transcript: '{transcript}'")
+                        result_queue.put(("completed", transcript.strip()))
+                    else:
+                        print(f"STT completed but no transcript: {data}")
                         
                 elif event_type == "conversation.item.input_audio_transcription.text":
-                    transcript = data.get("transcript", "") or data.get("stash", "")
-                    if transcript:
-                        result_queue.put(transcript)
+                    # 文字在 stash 字段中！
+                    transcript = (data.get("stash", "") or 
+                                 data.get("transcript", "") or 
+                                 data.get("text", ""))
+                    if transcript and transcript.strip():
+                        transcript_parts.append(transcript.strip())
+                        print(f"STT got partial transcript: '{transcript}'")
                         
             except Exception as e:
                 print(f"STT parse error: {e}")
@@ -193,8 +203,17 @@ class STTService:
         try:
             result = result_queue.get(timeout=30)
             ws.close()
+            # 如果返回的是元组，提取转录文本
+            if isinstance(result, tuple):
+                return result[1]
             return result
         except:
-            print("STT timeout")
+            # 超时时返回累积的转录片段
+            if transcript_parts:
+                final_transcript = ''.join(transcript_parts)
+                print(f"STT timeout, returning accumulated: '{final_transcript}'")
+                ws.close()
+                return final_transcript
+            print("STT timeout, no transcript parts accumulated")
             ws.close()
             return None
