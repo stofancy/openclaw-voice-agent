@@ -8,6 +8,8 @@ import json
 from unittest.mock import Mock, patch, AsyncMock
 
 from backend.voice_gateway.config import Config
+
+pytestmark = [pytest.mark.integration, pytest.mark.websocket]
 from backend.voice_gateway.webrtc_server import WebRTCServer
 
 @pytest.fixture

@@ -3,6 +3,7 @@ Test cases for US-04: Voice Activity Detection (VAD) functionality.
 """
 import asyncio
 import pytest
+pytestmark = [pytest.mark.integration, pytest.mark.websocket]
 import websockets
 import json
 from unittest.mock import Mock, patch

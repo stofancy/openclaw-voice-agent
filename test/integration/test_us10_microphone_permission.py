@@ -3,6 +3,7 @@
 Test for US-10: Microphone permission error handling.
 """
 import pytest
+pytestmark = [pytest.mark.integration]
 from unittest.mock import Mock, patch
 import sys
 import os

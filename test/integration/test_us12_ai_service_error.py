@@ -3,6 +3,7 @@ Test cases for US-12: AI service error handling.
 """
 import asyncio
 import pytest
+pytestmark = [pytest.mark.integration, pytest.mark.websocket]
 import websockets
 import json
 from unittest.mock import Mock, patch

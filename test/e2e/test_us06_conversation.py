@@ -8,14 +8,18 @@ Tests all acceptance criteria:
 - [x] Errors in one turn don't affect the next turn
 """
 import asyncio
+import pytest
 import websockets
 import json
 import sys
 import os
 import base64
 
+import pytest
+pytestmark = [pytest.mark.e2e, pytest.mark.websocket]
+
 # Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+sys.path.insert(0, 'backend')
 
 from voice_gateway.config import Config
 from voice_gateway.webrtc_server import WebRTCServer

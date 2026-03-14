@@ -5,6 +5,9 @@ import asyncio
 import sys
 import os
 
+import pytest
+pytestmark = [pytest.mark.integration, pytest.mark.websocket]
+
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 

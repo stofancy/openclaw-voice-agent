@@ -9,6 +9,8 @@ from unittest.mock import Mock, patch
 from backend.voice_gateway.config import Config
 from backend.voice_gateway.webrtc_server import WebRTCServer
 
+pytestmark = [pytest.mark.integration, pytest.mark.websocket]
+
 @pytest.fixture
 def config():
     """Test configuration."""

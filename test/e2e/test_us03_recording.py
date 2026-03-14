@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 
 
+pytestmark = [pytest.mark.e2e, pytest.mark.browser]
 @pytest.mark.unit
 def test_microphone_permission_request():
     """Test that microphone permission is requested via getUserMedia."""
