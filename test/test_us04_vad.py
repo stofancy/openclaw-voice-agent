@@ -71,8 +71,10 @@ async def test_vad_cleanup_on_unmount():
         assert "useEffect(() => {" in content
         assert "return () => stopVAD();" in content
 
+@pytest.mark.skip(reason="TODO: Implement actual test - requires VAD module integration testing")
 def test_vad_integration_readiness():
     """Test that VAD functionality is ready for integration."""
     # This test ensures all components are in place for VAD to work
     # with the rest of the system
-    assert True, "VAD integration is ready"
+    # TODO: Implement actual VAD integration test with mock audio data
+    pass

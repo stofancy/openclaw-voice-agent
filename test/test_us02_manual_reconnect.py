@@ -155,11 +155,10 @@ async def test_reconnect_failure_displays_error_message(config):
     # Since our server is reliable, we simulate failure by connecting to wrong port
     
     # Try to connect to non-existent server
-    try:
+    with pytest.raises(Exception):
         async with websockets.connect("ws://localhost:9999") as websocket:
             # This should fail
-            assert False, "Connection should have failed"
-    except Exception as e:
-        # Connection failure should result in error message
-        # Frontend would display error and reconnect button
-        assert True  # Just verify that connection fails as expected
+            pass
+    
+    # Connection failure should result in error message
+    # Frontend would display error and reconnect button

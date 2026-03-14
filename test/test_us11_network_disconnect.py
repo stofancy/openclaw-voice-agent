@@ -85,6 +85,7 @@ async def test_auto_reconnect_after_network_disconnect(config):
             pass
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="TODO: Implement actual test - requires frontend E2E testing for UI verification")
 async def test_reconnect_failure_shows_error_with_retry_button(config):
     """Test that after max retries, error message and retry button are shown."""
     # This is primarily a frontend test
@@ -93,4 +94,5 @@ async def test_reconnect_failure_shows_error_with_retry_button(config):
     # For now, we verify that the backend can handle the scenario
     # The actual UI verification would be done in E2E tests
     
-    assert True  # Placeholder for backend verification
+    # TODO: Implement backend error message verification when max retries exceeded
+    pass
