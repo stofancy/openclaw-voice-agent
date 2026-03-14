@@ -5,11 +5,23 @@ import asyncio
 import json
 import websockets
 import os
+import logging
 from typing import Optional, Dict, Set
 from .config import Config
 from .stt_service import STTService
 from .agent_client import AgentClient
 from .tts_service import TTSService
+
+# 配置日志
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(message)s',
+    handlers=[
+        logging.FileHandler('/tmp/webrtc.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 class WebRTCServer:
@@ -65,6 +77,7 @@ class WebRTCServer:
     
     async def handle_message(self, websocket: websockets.WebSocketServerProtocol, data: dict):
         """Handle different types of signaling messages."""
+        logger.info(f"Received message type: {data.get('type')}")
         message_type = data.get("type")
         
         if message_type == "offer":
@@ -270,7 +283,15 @@ class WebRTCServer:
             }))
             
             # Step 3: TTS - Text to Speech
-            audio_response = await self.tts_service.synthesize(agent_response)
+            logger.info(f"TTS synthesizing: {agent_response[:50]}...")
+            try:
+                audio_response = await self.tts_service.synthesize(agent_response)
+                logger.info(f"TTS result: {'success' if audio_response else 'failed'}")
+            except Exception as e:
+                logger.error(f"TTS error: {e}")
+                import traceback
+                traceback.print_exc()
+                audio_response = None
             
             if not audio_response:
                 # Fallback: send text response

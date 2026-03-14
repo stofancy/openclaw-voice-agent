@@ -34,9 +34,15 @@ class AgentClient:
             )
             
             if result.returncode == 0:
-                # Parse JSON output
+                # Parse JSON output - find JSON start (skip [plugins] logs)
                 try:
-                    response_data = json.loads(result.stdout)
+                    # Find the start of JSON (first '{')
+                    stdout = result.stdout
+                    json_start = stdout.find('{')
+                    if json_start > 0:
+                        stdout = stdout[json_start:]
+                    
+                    response_data = json.loads(stdout)
                     # Try different response formats
                     if 'result' in response_data:
                         payloads = response_data['result'].get('payloads', [])

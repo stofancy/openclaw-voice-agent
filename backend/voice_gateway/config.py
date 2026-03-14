@@ -2,7 +2,36 @@
 Configuration module for Voice Gateway.
 """
 import os
+from pathlib import Path
 from typing import Optional
+
+
+def _load_env_file() -> None:
+    """Load .env file from project root."""
+    # 尝试多个可能的 .env 位置
+    possible_paths = [
+        # 从当前模块向上查找
+        Path(__file__).parent.parent.parent / ".env",
+        # 项目根目录（audio-proxy/.env）
+        Path(__file__).parent.parent.parent.parent / "audio-proxy" / ".env",
+    ]
+    
+    for env_path in possible_paths:
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
+                        # 只设置未定义的环境变量
+                        if key not in os.environ:
+                            os.environ[key] = value
+            return
+
+
+# 模块加载时自动加载 .env
+_load_env_file()
+
 
 class Config:
     """Application configuration."""
